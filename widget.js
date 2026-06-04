@@ -872,7 +872,7 @@
       await new Promise(resolve => setTimeout(resolve, 1200)); // Simulate thinking
       
       const query = userPrompt.toLowerCase();
-      const promptLower = config.systemPrompt.toLowerCase();
+      const promptLower = (config.systemPrompt.split(/instructions:/i)[0] || '').toLowerCase();
       const bizName = config.botName.replace(/ assistant/i, '');
       const bookingUrl = config.calendlyUrl || 'https://calendly.com/mock-dentist';
       
