@@ -46,6 +46,71 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Track crawled pages during scraping session
   let crawledPages = [];
+  let lastScrapedDataText = '';
+  let lastScrapedDomain = '';
+
+  function compileSystemPrompt() {
+    const domainName = lastScrapedDomain || 'Business';
+    
+    // Combine base scraped text + manual supplement
+    let fullTrainingData = lastScrapedDataText;
+    const manualSupp = manualDataInput?.value?.trim();
+    if (manualSupp) {
+      fullTrainingData += `\nMANUAL SUPPLEMENT (prices, menu, extra info):\n${manualSupp}\n`;
+    }
+
+    const bookingMethodVal = bookingMethodInput.value;
+    const bookingLink = bookingMethodVal === 'builtin' ? '#book-form' : (calendlyUrlInput.value.trim() || 'https://calendly.com/mock-dentist');
+    
+    systemPromptInput.value = `You are a helpful, professional AI assistant for ${domainName}. Your goal is to guide visitors, answer their inquiries, and assist them in scheduling appointments.
+
+---
+WEBSITE TRAINING DATA:
+${fullTrainingData.substring(0, 45000)}
+---
+
+INSTRUCTIONS:
+1. ADAPT YOUR PERSONA: Adopt the appropriate persona based on the website content. For example:
+   - If it is a service trade (plumber, electrician, locksmith): Act as a dispatcher/assistant. Ask questions about the specific issue they need help with (e.g. leaks, wiring, emergency repairs) before guiding them to schedule a visit.
+   - If it is a personal portfolio/resume: Speak warmly in the first-person (I/me/my) representing the person. Share experience, skills, and projects.
+   - If it is a restaurant: Act as the restaurant host/assistant. Provide information on dishes, pricing, beers, drinks, and reserve tables.
+   - If it is real estate: Act as a property advisor. Ask if they are looking to buy, rent, or sell. Answer questions about warm rent (inclusive of utilities) or cold rent if available.
+2. PRICING & DATA SEARCH: Always look up the exact details (e.g., cuisine, specific dishes, prices, service fees, rates) in the WEBSITE TRAINING DATA above and state them directly to the user. Do NOT tell them to check the menu, website, or other pages if the details are already in the training data; answer their questions fully and directly using the scraped information. If a price or cost is not listed anywhere in the training data, state that rates vary by project/details and guide them to schedule a call for a custom estimate.
+3. BOOKING INLINE: If the user wants to book, schedule, or reserve, you MUST guide them by outputting this exact Markdown link: [Book Appointment](${bookingLink}).
+4. CONVERSATIONAL BREVITY: Keep all replies warm, helpful, and concise (under 2-3 sentences max).
+5. CLOSING TRIGGER: If the user says "thank you", "thanks", "danke", "vielen dank", "merci", or indicates they are done, reply politely and ask if you can close the chat by including this exact link: "Can we close the chat? [Yes, close chat](#close) or [Keep chatting](#keep)"..`;
+  }
+
+  function parseLoadedSystemPrompt(systemPrompt) {
+    try {
+      // 1. Try to extract domain
+      const domainMatch = systemPrompt.match(/AI assistant for ([^.]+)\./i);
+      if (domainMatch) {
+        lastScrapedDomain = domainMatch[1];
+      }
+
+      // 2. Try to extract training data block
+      const startTag = 'WEBSITE TRAINING DATA:\n';
+      const endTag = '\n---';
+      const startIndex = systemPrompt.indexOf(startTag);
+      const endIndex = systemPrompt.indexOf(endTag, startIndex);
+      
+      if (startIndex !== -1 && endIndex !== -1) {
+        let trainingBlock = systemPrompt.substring(startIndex + startTag.length, endIndex);
+        
+        // Remove the manual supplement part from the trainingBlock to get base scraped text
+        const manualSuppHeader = '\nMANUAL SUPPLEMENT (prices, menu, extra info):\n';
+        const manualIndex = trainingBlock.indexOf(manualSuppHeader);
+        if (manualIndex !== -1) {
+          trainingBlock = trainingBlock.substring(0, manualIndex);
+        }
+        
+        lastScrapedDataText = trainingBlock;
+      }
+    } catch (e) {
+      console.warn('Failed to parse loaded system prompt:', e);
+    }
+  }
 
   // Constants for preset templates
   const presets = {
@@ -469,6 +534,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  if (manualDataInput) {
+    manualDataInput.addEventListener('input', () => {
+      compileSystemPrompt();
+      updateWidgetPreview();
+    });
+  }
+
   bookingMethodInput.addEventListener('change', () => {
     calendlyUrlGroup.style.display = bookingMethodInput.value === 'calendly' ? 'flex' : 'none';
     updateWidgetPreview();
@@ -746,33 +818,12 @@ document.addEventListener('DOMContentLoaded', () => {
         await new Promise(r => setTimeout(r, 400));
       }
 
-      // Append any manually-entered supplement (menu, prices, FAQs) that the scraper couldn't access
-      const manualSupp = manualDataInput?.value?.trim();
-      if (manualSupp) {
-        trainingDataText += `\nMANUAL SUPPLEMENT (prices, menu, extra info):\n${manualSupp}\n`;
-      }
+      // Cache base scraped text and domain so manual data updates can rebuild in real-time without re-scraping
+      lastScrapedDataText = trainingDataText;
+      lastScrapedDomain = domainName;
 
-      // 3. Compile System Instruction Prompt
-      const bookingMethodVal = bookingMethodInput.value;
-      const bookingLink = bookingMethodVal === 'builtin' ? '#book-form' : (calendlyUrlInput.value.trim() || 'https://calendly.com/mock-dentist');
-      
-       systemPromptInput.value = `You are a helpful, professional AI assistant for ${domainName}. Your goal is to guide visitors, answer their inquiries, and assist them in scheduling appointments.
-
----
-WEBSITE TRAINING DATA:
-${trainingDataText.substring(0, 45000)}
----
-
-INSTRUCTIONS:
-1. ADAPT YOUR PERSONA: Adopt the appropriate persona based on the website content. For example:
-   - If it is a service trade (plumber, electrician, locksmith): Act as a dispatcher/assistant. Ask questions about the specific issue they need help with (e.g. leaks, wiring, emergency repairs) before guiding them to schedule a visit.
-   - If it is a personal portfolio/resume: Speak warmly in the first-person (I/me/my) representing the person. Share experience, skills, and projects.
-   - If it is a restaurant: Act as the restaurant host/assistant. Provide information on dishes, pricing, beers, drinks, and reserve tables.
-   - If it is real estate: Act as a property advisor. Ask if they are looking to buy, rent, or sell. Answer questions about warm rent (inclusive of utilities) or cold rent if available.
-2. PRICING & DATA SEARCH: Always look up the exact details (e.g., cuisine, specific dishes, prices, service fees, rates) in the WEBSITE TRAINING DATA above and state them directly to the user. Do NOT tell them to check the menu, website, or other pages if the details are already in the training data; answer their questions fully and directly using the scraped information. If a price or cost is not listed anywhere in the training data, state that rates vary by project/details and guide them to schedule a call for a custom estimate.
-3. BOOKING INLINE: If the user wants to book, schedule, or reserve, you MUST guide them by outputting this exact Markdown link: [Book Appointment](${bookingLink}).
-4. CONVERSATIONAL BREVITY: Keep all replies warm, helpful, and concise (under 2-3 sentences max).
-5. CLOSING TRIGGER: If the user says "thank you", "thanks", "danke", "vielen dank", "merci", or indicates they are done, reply politely and ask if you can close the chat by including this exact link: "Can we close the chat? [Yes, close chat](#close) or [Keep chatting](#keep)"..`;
+      // Compile the system instruction prompt
+      compileSystemPrompt();
 
       // Update inputs with smart defaults based on scraped content
       botNameInput.value = `${domainName} Assistant`;
@@ -939,6 +990,7 @@ To configure your chatbot:
       bookingMethod: bookingMethodInput.value,
       calendlyUrl: calendlyUrlInput.value.trim(),
       website: scrapeUrlInput.value.trim(),
+      manualData: manualDataInput.value.trim(),
       emailConfig: {
         receiverEmail: receiverEmailInput.value.trim(),
         resendApiKey: resendApiKeyInput.value.trim(),
@@ -968,6 +1020,13 @@ To configure your chatbot:
     scrapeUrlInput.value = bot.website || '';
     scrapeUrlInput.setAttribute('data-original-website', bot.website || '');
     updatePresetDotsState(bot.color || '#6366f1');
+    
+    // Load manualData
+    manualDataInput.value = bot.manualData || '';
+    
+    // Parse systemPrompt to recover lastScrapedDataText and lastScrapedDomain
+    parseLoadedSystemPrompt(bot.systemPrompt || '');
+
     updateWidgetPreview(false);
     
     if (activeBotId) {
