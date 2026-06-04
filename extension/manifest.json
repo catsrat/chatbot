@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "LuminaBot Scraper Helper",
+  "version": "1.0",
+  "description": "Bypasses CORS and CDN restrictions for the LuminaBot AI Chatbot Builder.",
+  "permissions": [
+    "declarativeNetRequest",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "file:///*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

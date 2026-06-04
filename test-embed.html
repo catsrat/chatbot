@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smile Dental Clinic | Family Dentist</title>
+  <style>
+    :root {
+      --primary: #0ea5e9;
+      --dark: #0f172a;
+      --light: #f8fafc;
+      --text: #334155;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text);
+      line-height: 1.6;
+      background-color: var(--light);
+    }
+    header {
+      background-color: white;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 20px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    nav ul {
+      display: flex;
+      list-style: none;
+      gap: 24px;
+    }
+    nav a {
+      text-decoration: none;
+      color: var(--text);
+      font-weight: 500;
+      font-size: 14px;
+      transition: color 0.2s;
+    }
+    nav a:hover {
+      color: var(--primary);
+    }
+    .btn {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 50px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      text-decoration: none;
+    }
+    .btn:hover {
+      opacity: 0.9;
+    }
+    
+    /* Hero section */
+    .hero {
+      padding: 100px 40px;
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: center;
+      gap: 60px;
+    }
+    .hero-content h1 {
+      font-size: 48px;
+      color: var(--dark);
+      line-height: 1.2;
+      margin-bottom: 20px;
+    }
+    .hero-content p {
+      font-size: 18px;
+      margin-bottom: 30px;
+      color: #64748b;
+    }
+    .hero-img {
+      background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+      border-radius: 24px;
+      height: 380px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 80px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05);
+    }
+
+    /* Services section */
+    .services {
+      background-color: white;
+      padding: 80px 40px;
+    }
+    .services-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .services h2 {
+      font-size: 32px;
+      text-align: center;
+      color: var(--dark);
+      margin-bottom: 50px;
+    }
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 30px;
+    }
+    .service-card {
+      background-color: var(--light);
+      border-radius: 16px;
+      padding: 40px 30px;
+      text-align: center;
+      border: 1px solid #e2e8f0;
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .service-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.05);
+    }
+    .service-icon {
+      font-size: 40px;
+      margin-bottom: 20px;
+      display: inline-block;
+    }
+    .service-card h3 {
+      font-size: 20px;
+      color: var(--dark);
+      margin-bottom: 12px;
+    }
+    .service-card p {
+      font-size: 14px;
+      color: #64748b;
+    }
+
+    footer {
+      background-color: var(--dark);
+      color: #94a3b8;
+      padding: 40px;
+      text-align: center;
+      border-top: 1px solid #1e293b;
+      font-size: 14px;
+    }
+    footer p {
+      margin-bottom: 8px;
+    }
+    footer a {
+      color: #cbd5e1;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">
+      <span>🦷</span> Smile Dental
+    </div>
+    <nav>
+      <ul>
+        <li><a href="#">Home</a></li>
+        <li><a href="#">About Us</a></li>
+        <li><a href="#">Services</a></li>
+        <li><a href="#">Pricing</a></li>
+      </ul>
+    </nav>
+    <a href="#" class="btn">Book Online</a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-content">
+        <h1>Your Dream Smile Starts Here</h1>
+        <p>Premium family dentistry and orthodontics. Schedule an appointment online today and experience general cleanings, whitening, and fillings in a warm, relaxing clinic.</p>
+        <div style="display: flex; gap: 16px;">
+          <a href="#" class="btn">Schedule Visit</a>
+          <a href="#" class="btn" style="background-color: transparent; border: 1px solid var(--primary); color: var(--primary);">View Pricing</a>
+        </div>
+      </div>
+      <div class="hero-img">
+        🦷✨
+      </div>
+    </section>
+
+    <section class="services">
+      <div class="services-container">
+        <h2>Our Core Specialties</h2>
+        <div class="services-grid">
+          <div class="service-card">
+            <span class="service-icon">🦷</span>
+            <h3>Routine Cleaning</h3>
+            <p>Comprehensive scaling, tartar removal, and cavity-prevention treatment starting at €79.</p>
+          </div>
+          <div class="service-card">
+            <span class="service-icon">✨</span>
+            <h3>Teeth Whitening</h3>
+            <p>Advanced clinical whitening treatment to bring back the brilliant shine of your teeth for €199.</p>
+          </div>
+          <div class="service-card">
+            <span class="service-icon">🚑</span>
+            <h3>Emergency Dental</h3>
+            <p>Priority appointments for severe toothaches, root canals, and structural crowns.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2026 Smile Dental Clinic. All rights reserved.</p>
+    <p>This is a simulated customer website to demonstrate the LuminaBot widget integration.</p>
+  </footer>
+
+  <!-- EMBED CODE TEST -->
+  <script 
+    src="widget.js" 
+    data-api-key="DEMO" 
+    data-bot-name="Smile Assistant" 
+    data-theme-color="#0ea5e9" 
+    data-calendly-url="https://calendly.com/mock-dentist"
+    data-welcome-msg="Hi there! Welcome to Smile Dental. How can I help you book an appointment or learn about our cleaning packages?" 
+    data-system-prompt="You are a friendly dentist assistant for Smile Dental. Booking link: https://calendly.com/mock-dentist. Cleanings are €79, Whitening is €199. Keep answers short.">
+  </script>
+
+</body>
+</html>

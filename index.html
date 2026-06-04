@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LuminaBot Builder | Build & Sell AI Chatbots</title>
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="top-header">
+    <div class="logo-container">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" fill="white"/>
+        </svg>
+      </div>
+      <span class="logo-text">LuminaBot</span>
+      <span class="header-badge">White-Label Builder</span>
+    </div>
+    
+    <div class="header-actions">
+      <button class="secondary-btn" id="myBotsBtn" style="position: relative;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        My Bots
+        <span id="botsBadge" style="display:none; position:absolute; top:-6px; right:-6px; background:#6366f1; color:white; border-radius:50%; width:18px; height:18px; font-size:10px; display:flex; align-items:center; justify-content:center; font-weight:700;">0</span>
+      </button>
+      <a href="test-embed.html" class="secondary-btn" target="_blank">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+        Test Full Embed
+      </a>
+      <button class="primary-btn" id="topCopyBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        Get Embed Code
+      </button>
+    </div>
+  </header>
+
+  <!-- App Body Layout -->
+  <div class="app-container">
+    
+    <!-- Sidebar: Configuration Panel -->
+    <aside class="sidebar">
+      <div>
+        <h2 class="sidebar-title">Chatbot Configurator</h2>
+        <p class="sidebar-desc">Customize your client's chatbot design and training in real-time.</p>
+      </div>
+
+      <!-- Card 1: Branding & Appearance -->
+      <section class="config-card">
+        <h3 class="card-title">1. Look & Feel</h3>
+        
+        <div class="form-group">
+          <label for="botName">Bot Display Name</label>
+          <input type="text" id="botName" value="Smile Assistant" placeholder="e.g. Smile Dental Assistant">
+        </div>
+
+        <div class="form-group">
+          <label for="botAvatar">Avatar Icon / Emoji</label>
+          <select id="botAvatar">
+            <option value="🤖">🤖 Robot</option>
+            <option value="🦷" selected>🦷 Tooth (Dentist)</option>
+            <option value="💪">💪 Muscle (Gym)</option>
+            <option value="🏠">🏠 House (Realtor)</option>
+            <option value="👩‍💼">👩‍💼 Receptionist</option>
+            <option value="🍔">🍔 Burger (Restaurant)</option>
+            <option value="🛍️">🛍️ Bag (Shop)</option>
+            <option value="💇">💇 Scissors (Salon)</option>
+            <option value="💬">💬 Chat Bubble</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Theme Brand Color</label>
+          <div class="color-picker-container">
+            <input type="color" id="themeColor" class="custom-color-input" value="#0ea5e9">
+            <div class="color-presets" id="colorPresets">
+              <span class="preset-dot active" data-color="#0ea5e9" style="background-color: #0ea5e9;"></span>
+              <span class="preset-dot" data-color="#ef4444" style="background-color: #ef4444;"></span>
+              <span class="preset-dot" data-color="#10b981" style="background-color: #10b981;"></span>
+              <span class="preset-dot" data-color="#6366f1" style="background-color: #6366f1;"></span>
+              <span class="preset-dot" data-color="#f59e0b" style="background-color: #f59e0b;"></span>
+              <span class="preset-dot" data-color="#ec4899" style="background-color: #ec4899;"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="welcomeMsg">Welcome Greeting</label>
+          <textarea id="welcomeMsg">Hi! Welcome to Smile Dental Clinic. How can I help you book or learn about our dental cleaning rates today?</textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="bookingMethod">Booking Method</label>
+          <select id="bookingMethod">
+            <option value="builtin" selected>Built-in Lead Form</option>
+            <option value="calendly">External Link (Calendly)</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="calendlyUrlGroup" style="display: none;">
+          <label for="calendlyUrl">Calendly Link</label>
+          <input type="text" id="calendlyUrl" value="https://calendly.com/mock-dentist" placeholder="https://calendly.com/your-username">
+        </div>
+      </section>
+
+      <!-- Card 2: AI Core Training -->
+      <section class="config-card">
+        <h3 class="card-title">2. AI Engine & Prompt</h3>
+        
+        <div class="form-group">
+          <label for="apiKey">Gemini API Key</label>
+          <input type="password" id="apiKey" value="DEMO" placeholder="Enter API Key or use 'DEMO'">
+          <span style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+            Use <strong>DEMO</strong> to test simulated responses. Get a free API key at AI Studio.
+          </span>
+        </div>
+
+        <div class="form-group">
+          <label>Preset Prompts</label>
+          <div class="template-grid" id="templateGrid">
+            <button class="template-btn active" data-type="dentist">Dentist</button>
+            <button class="template-btn" data-type="gym">Gym</button>
+            <button class="template-btn" data-type="realtor">Realtor</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="systemPrompt">System Instructions</label>
+          <textarea id="systemPrompt" style="min-height: 120px;">You are Smile Dental Clinic's friendly receptionist. Your goal is to guide visitors to book a dental checkup.
+- Cleaning costs €79. Whitening is €199.
+- If asked to book/schedule, provide this link: [Click here to book your slot](https://calendly.com/mock-dentist).
+- Keep replies brief and warm.</textarea>
+        </div>
+
+        <div class="form-group" style="border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 12px; margin-top: 6px;">
+          <label for="scrapeUrl">Auto-Train from Website URL</label>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="scrapeUrl" placeholder="https://example.com" style="flex: 1; min-width: 0;">
+            <button class="primary-btn" id="scrapeBtn" style="padding: 0 14px; height: 38px; font-size: 12px; box-shadow: none;">Train</button>
+          </div>
+          <span id="scrapeStatus" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;"></span>
+          <div id="extensionStatus" style="font-size: 10px; color: var(--text-muted); margin-top: 4px; line-height: 1.3;">
+            Detecting helper extension...
+          </div>
+          <details style="margin-top: 10px;" id="manualDataDetails">
+            <summary style="font-size: 11px; color: var(--text-muted); cursor: pointer; user-select: none; list-style: none; display: flex; align-items: center; gap: 6px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+              Add menu / price data manually
+            </summary>
+            <p style="font-size: 10px; color: var(--text-muted); margin: 6px 0 4px; line-height: 1.4;">
+              Paste any text you want the AI to know (e.g. copied menu, price list, FAQs). This is appended to the scraped data.
+            </p>
+            <textarea id="manualDataInput" placeholder="Example:&#10;Beer prices: Veltins Pils 0.4L = 3.50€, 0.5L = 4.20€&#10;Paulaner Hefeweizen 0.5L = 4.80€&#10;..." style="width: 100%; height: 90px; font-size: 11px; resize: vertical; box-sizing: border-box;"></textarea>
+          </details>
+        </div>
+      </section>
+
+      <!-- Card 3: Email Notifications -->
+      <section class="config-card">
+        <h3 class="card-title">3. Email Notifications</h3>
+        
+        <div class="form-group">
+          <label for="receiverEmail">Owner Notification Email</label>
+          <input type="text" id="receiverEmail" placeholder="owner@example.com">
+          <span style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+            Where new leads/bookings alerts will be sent.
+          </span>
+        </div>
+
+        <div class="form-group">
+          <label for="resendApiKey">Resend API Key (Optional)</label>
+          <input type="password" id="resendApiKey" placeholder="re_...">
+          <span style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+            Required to send real emails. Otherwise, emails are logged to the console.
+          </span>
+        </div>
+
+        <div class="form-group">
+          <label for="senderEmail">Sender Email (From)</label>
+          <input type="text" id="senderEmail" value="onboarding@resend.dev" placeholder="e.g. notifications@yourdomain.com">
+          <span style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+            Must be verified in your Resend account.
+          </span>
+        </div>
+      </section>
+
+      <!-- Card 4: Save & Deploy -->
+      <section class="config-card">
+        <h3 class="card-title">4. Save & Deploy</h3>
+        
+        <!-- Save Bot to central storage -->
+        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+          <button class="primary-btn" id="saveBotBtn" style="flex: 1; font-size: 12px; padding: 8px 12px; box-shadow: none;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Save Bot
+          </button>
+          <button class="secondary-btn" id="updateBotBtn" style="flex: 1; font-size: 12px; padding: 8px 12px; display:none;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+            Update Bot
+          </button>
+        </div>
+        <div id="saveBotStatus" style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px; min-height: 16px;"></div>
+
+        <!-- Standalone Leads Portal (Owner View — shareable with clients) -->
+        <div id="ownerPortalSection" style="display: none; margin-bottom: 10px; border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; padding: 10px; background: rgba(16,185,129,0.05);">
+          <div style="font-size: 11px; color: #6ee7b7; font-weight: 600; margin-bottom: 4px;">📊 Owner Bookings Portal</div>
+          <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 8px; line-height: 1.4;">Share this link with your client so they can view all incoming bookings — no login needed, just bookmark it.</p>
+          <div style="display: flex; gap: 6px;">
+            <a href="#" class="secondary-btn" id="openLeadsPageBtn" target="_blank" style="flex: 1; justify-content: center; font-size: 11px; padding: 6px 8px; border-color: rgba(16,185,129,0.3); color: #6ee7b7;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              Open
+            </a>
+            <button class="primary-btn" id="copyPortalLinkBtn" style="flex: 1; font-size: 11px; padding: 6px 8px; box-shadow: none; background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); color: #6ee7b7;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy Link
+            </button>
+          </div>
+        </div>
+
+        <!-- Bot ID embed (shown after save) -->
+        <div id="botIdEmbedSection" style="display:none; margin-bottom: 10px; border: 1px solid rgba(99,102,241,0.3); border-radius: 8px; padding: 10px; background: rgba(99,102,241,0.05);">
+          <div style="font-size: 11px; color: #a5b4fc; font-weight: 600; margin-bottom: 4px;">🔗 Bot ID Embed (Recommended)</div>
+          <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 6px; line-height: 1.4;">Just one line. Config updates automatically when you edit the bot.</p>
+          <div class="embed-box" id="botIdEmbedCode" style="font-size: 11px;"></div>
+          <button class="primary-btn" id="copyBotIdEmbedBtn" style="margin-top: 6px; font-size: 11px; padding: 6px 10px; box-shadow: none;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copy Short Embed
+          </button>
+        </div>
+
+        <!-- Full inline embed (always available) -->
+        <p style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+          Or paste the full inline snippet before the closing <code>&lt;/body&gt;</code> tag:
+        </p>
+        <div class="embed-box" id="embedCode">
+          &lt;script src="http://127.0.0.1:5500/widget.js" data-api-key="DEMO" data-bot-name="Smile Assistant" data-theme-color="#0ea5e9" data-welcome-msg="..." data-system-prompt="..."&gt;&lt;/script&gt;
+        </div>
+        <button class="primary-btn" id="sidebarCopyBtn" style="margin-top: 4px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          Copy Full Embed Code
+        </button>
+      </section>
+    </aside>
+
+    <!-- Workspace: Live Mock Website Preview -->
+    <main class="preview-area">
+      <div class="preview-nav">
+        <h2 style="font-family: var(--font-display); font-size: 16px; font-weight: 500;">
+          Live Client-Site Mockup
+        </h2>
+        
+        <div class="nav-tabs" id="previewTabs">
+          <button class="tab-item active" id="tabSummary" data-view="summary">AI Training Summary</button>
+          <button class="tab-item" id="tabWebsite" data-view="website">Live Website View</button>
+          <button class="tab-item" id="tabLeads" data-view="leads">Captured Leads</button>
+        </div>
+      </div>
+
+      <!-- Browser Container -->
+      <div class="browser-mockup">
+        <div class="browser-chrome">
+          <div class="chrome-dots">
+            <span class="chrome-dot chrome-dot-red"></span>
+            <span class="chrome-dot chrome-dot-yellow"></span>
+            <span class="chrome-dot chrome-dot-green"></span>
+          </div>
+          <div class="chrome-address-bar" id="browserAddress">
+            https://www.smiledentalclinic.com
+          </div>
+        </div>
+        
+        <!-- Live HTML Page Render -->
+        <div class="browser-viewport" id="browserViewport">
+          <!-- Dynamic Real-Site Iframe Preview -->
+          <iframe id="previewIframe" style="width: 100%; height: 100%; border: none; display: none;"></iframe>
+          
+          <!-- Fallback Detailed Summary Card (visible when CORS blocks iframe) -->
+          <div id="site-summary-fallback" style="padding: 24px; display: flex; flex-direction: column; gap: 16px; font-family: 'Outfit', sans-serif; color: #1e293b; height: 100%; overflow-y: auto; background: radial-gradient(circle at top left, #f8fafc, #e2e8f0);">
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #cbd5e1; padding-bottom: 12px;">
+              <div>
+                <h1 id="fallback-site-name" style="font-size: 20px; color: #0ea5e9; font-weight: 700;">Smile Dental Clinic</h1>
+                <p id="fallback-site-url" style="font-size: 12px; color: #64748b; margin-top: 2px;">https://www.smiledentalclinic.com</p>
+              </div>
+              <div style="background: #dcfce7; border: 1px solid #bbf7d0; color: #15803d; font-size: 11px; padding: 4px 10px; border-radius: 20px; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #22c55e;"></span>
+                AI Agent Active
+              </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);">
+                <h3 style="font-size: 12px; color: #0f172a; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Scraped Pages (Trained)</h3>
+                <ul id="fallback-pages-list" style="list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #475569;">
+                  <li style="display: flex; align-items: center; gap: 6px;">✔️ Homepage (/)</li>
+                  <li style="display: flex; align-items: center; gap: 6px;">✔️ Service Rates (/services)</li>
+                  <li style="display: flex; align-items: center; gap: 6px;">✔️ About Clinic (/about)</li>
+                </ul>
+              </div>
+              
+              <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);">
+                <h3 style="font-size: 12px; color: #0f172a; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Setup Status</h3>
+                <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
+                  <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px;">
+                    <span style="color: #64748b;">AI Brain:</span>
+                    <strong id="fallback-model">Gemini 1.5 Flash</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between;">
+                    <span style="color: #64748b;">Calendar:</span>
+                    <strong id="fallback-calendar" style="color: #0ea5e9;">Connected (Calendly)</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; flex: 1; min-height: 120px; display: flex; flex-direction: column; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);">
+              <h3 style="font-size: 12px; color: #0f172a; margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Training Knowledge Snippet</h3>
+              <textarea id="fallback-knowledge-preview" readonly style="flex: 1; width: 100%; border: 1px solid #cbd5e1; background: #f8fafc; color: #334155; padding: 10px; font-size: 11px; border-radius: 6px; font-family: monospace; resize: none; outline: none;"></textarea>
+            </div>
+          </div>
+
+          <!-- Captured Leads Panel (visible when leads tab is active) -->
+          <div id="site-leads-container" style="padding: 24px; display: none; flex-direction: column; gap: 16px; font-family: 'Outfit', sans-serif; color: #1e293b; height: 100%; overflow-y: auto; background: radial-gradient(circle at top left, #f8fafc, #e2e8f0);">
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #cbd5e1; padding-bottom: 12px;">
+              <div>
+                <h1 style="font-size: 20px; color: #6366f1; font-weight: 700; margin: 0;">Captured Leads & Appointments</h1>
+                <p style="font-size: 12px; color: #64748b; margin-top: 2px; margin-bottom: 0;">Real-time appointment bookings submitted by website visitors.</p>
+              </div>
+              <button class="secondary-btn" id="clearLeadsBtn" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.05); font-size: 11px; padding: 6px 12px; font-weight: 600;">
+                Clear All
+              </button>
+            </div>
+
+            <!-- Leads Table / Grid -->
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03); flex: 1; display: flex; flex-direction: column; min-height: 250px;">
+              <div style="overflow-x: auto; flex: 1;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; color: #334155;">
+                  <thead>
+                    <tr style="background: #f1f5f9; border-bottom: 1px solid #e2e8f0; color: #475569; font-weight: 600;">
+                      <th style="padding: 12px 16px; font-family: 'Outfit', sans-serif;">Visitor Name</th>
+                      <th style="padding: 12px 16px; font-family: 'Outfit', sans-serif;">Contact Info</th>
+                      <th style="padding: 12px 16px; font-family: 'Outfit', sans-serif;">Date & Time</th>
+                      <th style="padding: 12px 16px; font-family: 'Outfit', sans-serif;">Notes/Details</th>
+                      <th style="padding: 12px 16px; text-align: center; font-family: 'Outfit', sans-serif;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="leadsTableBody">
+                    <!-- Dynamic Leads will be loaded here -->
+                  </tbody>
+                </table>
+                <div id="leadsEmptyState" style="padding: 60px 40px; text-align: center; color: #64748b; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+                  <span style="font-size: 40px;">📅</span>
+                  <strong style="color: #0f172a; font-family: 'Outfit', sans-serif;">No bookings captured yet</strong>
+                  <p style="font-size: 12px; max-width: 320px; line-height: 1.4; margin: 0;">Submit a booking in the chatbot preview in the bottom-right corner to see it populate here instantly!</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- DOCK CONTAINER FOR THE WIDGET -->
+          <div id="luminabot-preview-container"></div>
+          
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- Injected Chatbot Script -->
+  <script src="widget.js" id="widget-script" data-api-key="DEMO" data-bot-name="Smile Assistant" data-theme-color="#0ea5e9" data-welcome-msg="Hi! Welcome to Smile Dental Clinic. How can I help you book or learn about our dental cleaning rates today?" data-system-prompt="You are Smile Dental Clinic's friendly receptionist. Your goal is to guide visitors to book a checkup. Cleaning costs €79. Whitening is €199. Calendly booking link: https://calendly.com/mock-dentist"></script>
+
+  <!-- Builder Logic Script -->
+  <script src="index.js"></script>
+
+  <!-- My Bots Dashboard Modal -->
+  <div id="myBotsModal" style="display:none; position:fixed; inset:0; z-index:100000; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); align-items:center; justify-content:center;">
+    <div style="background:#1e293b; border:1px solid rgba(255,255,255,0.1); border-radius:16px; width:min(860px,95vw); max-height:80vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 25px 50px rgba(0,0,0,0.5);">
+      
+      <!-- Modal Header -->
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid rgba(255,255,255,0.08);">
+        <div>
+          <h2 style="font-size:18px; font-weight:700; color:#f8fafc; margin:0;">🤖 My Bots</h2>
+          <p style="font-size:12px; color:#64748b; margin:2px 0 0;">Central management — all your client chatbots in one place</p>
+        </div>
+        <button id="closeMyBotsModal" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#94a3b8; border-radius:8px; padding:6px 12px; cursor:pointer; font-size:13px;">✕ Close</button>
+      </div>
+
+      <!-- Bots List -->
+      <div id="myBotsList" style="flex:1; overflow-y:auto; padding:16px 24px; display:flex; flex-direction:column; gap:10px;">
+        <div style="text-align:center; color:#64748b; padding:40px; font-size:13px;">Loading bots...</div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div style="padding:12px 24px; border-top:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; justify-content:space-between;">
+        <span id="botsCount" style="font-size:12px; color:#64748b;">0 bots saved</span>
+        <button class="primary-btn" id="newBotBtn" style="font-size:12px; padding:8px 16px; box-shadow:none;">
+          + New Bot (clears form)
+        </button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

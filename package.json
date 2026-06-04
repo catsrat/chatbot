@@ -1,0 +1,13 @@
+{
+  "name": "luminabot-server",
+  "version": "1.0.0",
+  "description": "LuminaBot Builder — Node.js server with Bot Management API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
