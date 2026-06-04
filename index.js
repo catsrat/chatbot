@@ -411,7 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const doc = parser.parseFromString(htmlContent, 'text/html');
     
     // Strip layout code, metadata, styling, scripts, footers, sidebars, sideareas
-    doc.querySelectorAll('script, style, nav, footer, header, svg, iframe, noscript, link, meta, head, [class*="footer"], [id*="footer"], [class*="sidebar"], [id*="sidebar"], [class*="sidearea"], [id*="sidearea"]').forEach(el => el.remove());
+    doc.querySelectorAll('script, style, nav, footer, header, svg, iframe, noscript, link, meta, head, .footer, #footer, .sidebar, #sidebar, .sidearea, #sidearea, .widget-area, #colophon, .colophon, .et-l--footer, .et-l--header, .site-footer, .main-footer, .page-footer, .site-header, .main-header, .page-header, .site-sidebar, .main-sidebar, .page-sidebar').forEach(el => el.remove());
     
     // Add spaces around elements to prevent text from mashing together
     doc.querySelectorAll('p, div, li, td, th, h1, h2, h3, h4, h5, h6, tr, article, section, aside, option, span, strong, em, b, i, a').forEach(el => {
