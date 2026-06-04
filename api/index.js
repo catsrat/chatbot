@@ -14,12 +14,12 @@ const http = require('http');
 
 const app = express();
 const PORT = 5001;
-const BOTS_FILE = path.join(__dirname, 'bots.json');
-const BOOKINGS_FILE = path.join(__dirname, 'bookings.json');
+const BOTS_FILE = path.join(__dirname, '..', 'bots.json');
+const BOOKINGS_FILE = path.join(__dirname, '..', 'bookings.json');
 
 // ── Middleware ──────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '2mb' })); // Support large system prompts
-app.use(express.static(__dirname));      // Serve static files
+app.use(express.static(path.join(__dirname, '..')));      // Serve static files
 
 // Allow cross-origin requests (so any website can load the widget + fetch bot config)
 app.use((req, res, next) => {
@@ -568,10 +568,11 @@ function serverFetch(url, redirectCount = 0) {
   });
 }
 
-// ── Start Server ─────────────────────────────────────────────────────────────
+// ── Start Server / Export for Serverless ─────────────────────────────────────
 
-app.listen(PORT, () => {
-  console.log(`
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`
 ╔══════════════════════════════════════════╗
 ║   🤖 LuminaBot Server running            ║
 ║   http://localhost:${PORT}                 ║
@@ -583,5 +584,8 @@ app.listen(PORT, () => {
 ║   PUT    /api/bots/:id      (update)     ║
 ║   DELETE /api/bots/:id      (delete)     ║
 ╚══════════════════════════════════════════╝
-  `);
-});
+    `);
+  });
+}
+
+module.exports = app;

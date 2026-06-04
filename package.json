@@ -2,10 +2,10 @@
   "name": "luminabot-server",
   "version": "1.0.0",
   "description": "LuminaBot Builder — Node.js server with Bot Management API",
-  "main": "server.js",
+  "main": "api/index.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "start": "node api/index.js",
+    "dev": "node api/index.js"
   },
   "dependencies": {
     "@vercel/kv": "^1.0.1",
