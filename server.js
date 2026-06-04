@@ -30,8 +30,32 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
-function loadBots() {
+// Database connection (Vercel KV or File fallback)
+let kv = null;
+if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+  try {
+    const { createClient } = require('@vercel/kv');
+    kv = createClient({
+      url: process.env.KV_REST_API_URL,
+      token: process.env.KV_REST_API_TOKEN,
+    });
+    console.log('⚡ Connected to Vercel KV Storage');
+  } catch (err) {
+    console.warn('⚠️ @vercel/kv module not found, falling back to local files:', err.message);
+  }
+} else {
+  console.log('📁 Using Local JSON Filesystem Storage');
+}
+
+async function loadBots() {
+  if (kv) {
+    try {
+      const bots = await kv.get('bots');
+      return bots || {};
+    } catch (e) {
+      console.error('Error reading bots from KV, falling back to file:', e.message);
+    }
+  }
   try {
     if (!fs.existsSync(BOTS_FILE)) return {};
     return JSON.parse(fs.readFileSync(BOTS_FILE, 'utf8'));
@@ -41,11 +65,27 @@ function loadBots() {
   }
 }
 
-function saveBots(bots) {
+async function saveBots(bots) {
+  if (kv) {
+    try {
+      await kv.set('bots', bots);
+      return;
+    } catch (e) {
+      console.error('Error writing bots to KV, falling back to file:', e.message);
+    }
+  }
   fs.writeFileSync(BOTS_FILE, JSON.stringify(bots, null, 2), 'utf8');
 }
 
-function loadBookings() {
+async function loadBookings() {
+  if (kv) {
+    try {
+      const bookings = await kv.get('bookings');
+      return bookings || {};
+    } catch (e) {
+      console.error('Error reading bookings from KV, falling back to file:', e.message);
+    }
+  }
   try {
     if (!fs.existsSync(BOOKINGS_FILE)) return {};
     return JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf8'));
@@ -55,7 +95,15 @@ function loadBookings() {
   }
 }
 
-function saveBookings(bookings) {
+async function saveBookings(bookings) {
+  if (kv) {
+    try {
+      await kv.set('bookings', bookings);
+      return;
+    } catch (e) {
+      console.error('Error writing bookings to KV, falling back to file:', e.message);
+    }
+  }
   fs.writeFileSync(BOOKINGS_FILE, JSON.stringify(bookings, null, 2), 'utf8');
 }
 
@@ -257,8 +305,8 @@ function generateBotId(name, website) {
 // ── API Routes ───────────────────────────────────────────────────────────────
 
 // GET /api/bots — List all bots (summary, no huge system prompt in list)
-app.get('/api/bots', (req, res) => {
-  const bots = loadBots();
+app.get('/api/bots', async (req, res) => {
+  const bots = await loadBots();
   const summary = Object.values(bots).map(bot => ({
     id: bot.id,
     name: bot.name,
@@ -274,16 +322,16 @@ app.get('/api/bots', (req, res) => {
 });
 
 // GET /api/bots/:id — Get full bot config (used by widget.js to load a bot)
-app.get('/api/bots/:id', (req, res) => {
-  const bots = loadBots();
+app.get('/api/bots/:id', async (req, res) => {
+  const bots = await loadBots();
   const bot = bots[req.params.id];
   if (!bot) return res.status(404).json({ error: 'Bot not found' });
   res.json(bot);
 });
 
 // POST /api/bots — Create a new bot, returns the generated bot ID
-app.post('/api/bots', (req, res) => {
-  const bots = loadBots();
+app.post('/api/bots', async (req, res) => {
+  const bots = await loadBots();
   const data = req.body;
 
   if (!data.name && !data.website) {
@@ -308,15 +356,15 @@ app.post('/api/bots', (req, res) => {
   };
 
   bots[id] = bot;
-  saveBots(bots);
+  await saveBots(bots);
 
   console.log(`✅ Bot created: "${bot.name}" (${id})`);
   res.status(201).json({ id, bot });
 });
 
 // PUT /api/bots/:id — Update an existing bot
-app.put('/api/bots/:id', (req, res) => {
-  const bots = loadBots();
+app.put('/api/bots/:id', async (req, res) => {
+  const bots = await loadBots();
   const existing = bots[req.params.id];
   if (!existing) return res.status(404).json({ error: 'Bot not found' });
 
@@ -329,19 +377,19 @@ app.put('/api/bots/:id', (req, res) => {
   };
 
   bots[req.params.id] = updated;
-  saveBots(bots);
+  await saveBots(bots);
 
   console.log(`✏️  Bot updated: "${updated.name}" (${req.params.id})`);
   res.json({ id: req.params.id, bot: updated });
 });
 
 // DELETE /api/bots/:id — Delete a bot
-app.delete('/api/bots/:id', (req, res) => {
-  const bots = loadBots();
+app.delete('/api/bots/:id', async (req, res) => {
+  const bots = await loadBots();
   if (!bots[req.params.id]) return res.status(404).json({ error: 'Bot not found' });
   const name = bots[req.params.id].name;
   delete bots[req.params.id];
-  saveBots(bots);
+  await saveBots(bots);
   console.log(`🗑️  Bot deleted: "${name}" (${req.params.id})`);
   res.json({ success: true });
 });
@@ -349,8 +397,8 @@ app.delete('/api/bots/:id', (req, res) => {
 // ── Booking API Routes ───────────────────────────────────────────────────────
 
 // GET /api/bots/:id/bookings — Get all bookings for a specific bot
-app.get('/api/bots/:id/bookings', (req, res) => {
-  const bookings = loadBookings();
+app.get('/api/bots/:id/bookings', async (req, res) => {
+  const bookings = await loadBookings();
   const botBookings = Object.values(bookings).filter(b => b.botId === req.params.id);
   // Sort newest first
   botBookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -358,8 +406,8 @@ app.get('/api/bots/:id/bookings', (req, res) => {
 });
 
 // POST /api/bots/:id/bookings — Add a booking for a specific bot
-app.post('/api/bots/:id/bookings', (req, res) => {
-  const bots = loadBots();
+app.post('/api/bots/:id/bookings', async (req, res) => {
+  const bots = await loadBots();
   const bot = bots[req.params.id];
   // Allow bookings for 'DEMO' or temporary/unregistered bots in preview mode
   const botName = bot ? bot.name : (req.params.id === 'DEMO' || req.params.id === 'undefined' ? 'Demo Bot' : 'Unknown Bot');
@@ -369,7 +417,7 @@ app.post('/api/bots/:id/bookings', (req, res) => {
     return res.status(400).json({ error: 'Name, contact info, date, and time are required' });
   }
 
-  const bookings = loadBookings();
+  const bookings = await loadBookings();
   const id = 'booking-' + Math.random().toString(36).substring(2, 7) + Date.now().toString(36);
   const now = new Date().toISOString();
 
@@ -386,7 +434,7 @@ app.post('/api/bots/:id/bookings', (req, res) => {
   };
 
   bookings[id] = newBooking;
-  saveBookings(bookings);
+  await saveBookings(bookings);
 
   console.log(`📅 Booking created for bot "${newBooking.botName}": ${newBooking.name} on ${newBooking.date} at ${newBooking.time}`);
   
@@ -404,26 +452,26 @@ app.post('/api/bots/:id/bookings', (req, res) => {
 });
 
 // DELETE /api/bookings/:id — Delete a booking
-app.delete('/api/bookings/:id', (req, res) => {
-  const bookings = loadBookings();
+app.delete('/api/bookings/:id', async (req, res) => {
+  const bookings = await loadBookings();
   if (!bookings[req.params.id]) return res.status(404).json({ error: 'Booking not found' });
   const botId = bookings[req.params.id].botId;
   delete bookings[req.params.id];
-  saveBookings(bookings);
+  await saveBookings(bookings);
   console.log(`🗑️  Booking deleted: ${req.params.id}`);
   res.json({ success: true });
 });
 
 // DELETE /api/bots/:id/bookings — Clear all bookings for a specific bot
-app.delete('/api/bots/:id/bookings', (req, res) => {
-  const bookings = loadBookings();
+app.delete('/api/bots/:id/bookings', async (req, res) => {
+  const bookings = await loadBookings();
   const filtered = {};
   Object.keys(bookings).forEach(key => {
     if (bookings[key].botId !== req.params.id) {
       filtered[key] = bookings[key];
     }
   });
-  saveBookings(filtered);
+  await saveBookings(filtered);
   console.log(`🗑️  All bookings cleared for bot: ${req.params.id}`);
   res.json({ success: true });
 });
