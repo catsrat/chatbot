@@ -14,8 +14,31 @@ const http = require('http');
 
 const app = express();
 const PORT = 5001;
-const BOTS_FILE = path.join(__dirname, '..', 'bots.json');
-const BOOKINGS_FILE = path.join(__dirname, '..', 'bookings.json');
+// Database paths (local vs writable /tmp fallback for serverless read-only environments)
+const LOCAL_BOTS_FILE = path.join(__dirname, '..', 'bots.json');
+const LOCAL_BOOKINGS_FILE = path.join(__dirname, '..', 'bookings.json');
+const TMP_BOTS_FILE = '/tmp/bots.json';
+const TMP_BOOKINGS_FILE = '/tmp/bookings.json';
+
+function getBotsFilePath() {
+  try {
+    const file = fs.existsSync(LOCAL_BOTS_FILE) ? LOCAL_BOTS_FILE : path.dirname(LOCAL_BOTS_FILE);
+    fs.accessSync(file, fs.constants.W_OK);
+    return LOCAL_BOTS_FILE;
+  } catch (e) {
+    return TMP_BOTS_FILE;
+  }
+}
+
+function getBookingsFilePath() {
+  try {
+    const file = fs.existsSync(LOCAL_BOOKINGS_FILE) ? LOCAL_BOOKINGS_FILE : path.dirname(LOCAL_BOOKINGS_FILE);
+    fs.accessSync(file, fs.constants.W_OK);
+    return LOCAL_BOOKINGS_FILE;
+  } catch (e) {
+    return TMP_BOOKINGS_FILE;
+  }
+}
 
 // ── Middleware ──────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '2mb' })); // Support large system prompts
@@ -57,10 +80,11 @@ async function loadBots() {
     }
   }
   try {
-    if (!fs.existsSync(BOTS_FILE)) return {};
-    return JSON.parse(fs.readFileSync(BOTS_FILE, 'utf8'));
+    const file = getBotsFilePath();
+    if (!fs.existsSync(file)) return {};
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (e) {
-    console.error('Error reading bots.json:', e.message);
+    console.error('Error reading bots file:', e.message);
     return {};
   }
 }
@@ -74,7 +98,13 @@ async function saveBots(bots) {
       console.error('Error writing bots to KV, falling back to file:', e.message);
     }
   }
-  fs.writeFileSync(BOTS_FILE, JSON.stringify(bots, null, 2), 'utf8');
+  try {
+    const file = getBotsFilePath();
+    fs.writeFileSync(file, JSON.stringify(bots, null, 2), 'utf8');
+  } catch (e) {
+    console.error('Error writing bots file:', e.message);
+    throw e;
+  }
 }
 
 async function loadBookings() {
@@ -87,10 +117,11 @@ async function loadBookings() {
     }
   }
   try {
-    if (!fs.existsSync(BOOKINGS_FILE)) return {};
-    return JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf8'));
+    const file = getBookingsFilePath();
+    if (!fs.existsSync(file)) return {};
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (e) {
-    console.error('Error reading bookings.json:', e.message);
+    console.error('Error reading bookings file:', e.message);
     return {};
   }
 }
@@ -104,7 +135,13 @@ async function saveBookings(bookings) {
       console.error('Error writing bookings to KV, falling back to file:', e.message);
     }
   }
-  fs.writeFileSync(BOOKINGS_FILE, JSON.stringify(bookings, null, 2), 'utf8');
+  try {
+    const file = getBookingsFilePath();
+    fs.writeFileSync(file, JSON.stringify(bookings, null, 2), 'utf8');
+  } catch (e) {
+    console.error('Error writing bookings file:', e.message);
+    throw e;
+  }
 }
 
 // ── Email Notification System ────────────────────────────────────────────────
@@ -302,10 +339,15 @@ function generateBotId(name, website) {
   return `${base}-${suffix}`;
 }
 
+// Helper to catch async errors in Express 4 handlers and forward them to global error middleware
+const asyncHandler = fn => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
+
 // ── API Routes ───────────────────────────────────────────────────────────────
 
 // GET /api/bots — List all bots (summary, no huge system prompt in list)
-app.get('/api/bots', async (req, res) => {
+app.get('/api/bots', asyncHandler(async (req, res) => {
   const bots = await loadBots();
   const summary = Object.values(bots).map(bot => ({
     id: bot.id,
@@ -319,18 +361,18 @@ app.get('/api/bots', async (req, res) => {
   // Sort newest first
   summary.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
   res.json({ bots: summary, total: summary.length });
-});
+}));
 
 // GET /api/bots/:id — Get full bot config (used by widget.js to load a bot)
-app.get('/api/bots/:id', async (req, res) => {
+app.get('/api/bots/:id', asyncHandler(async (req, res) => {
   const bots = await loadBots();
   const bot = bots[req.params.id];
   if (!bot) return res.status(404).json({ error: 'Bot not found' });
   res.json(bot);
-});
+}));
 
 // POST /api/bots — Create a new bot, returns the generated bot ID
-app.post('/api/bots', async (req, res) => {
+app.post('/api/bots', asyncHandler(async (req, res) => {
   const bots = await loadBots();
   const data = req.body;
 
@@ -353,6 +395,12 @@ app.post('/api/bots', async (req, res) => {
     website: data.website || '',
     createdAt: now,
     updatedAt: now,
+    bookingMethod: data.bookingMethod || 'builtin',
+    emailConfig: data.emailConfig || {
+      receiverEmail: '',
+      resendApiKey: '',
+      senderEmail: 'onboarding@resend.dev'
+    }
   };
 
   bots[id] = bot;
@@ -360,10 +408,10 @@ app.post('/api/bots', async (req, res) => {
 
   console.log(`✅ Bot created: "${bot.name}" (${id})`);
   res.status(201).json({ id, bot });
-});
+}));
 
 // PUT /api/bots/:id — Update an existing bot
-app.put('/api/bots/:id', async (req, res) => {
+app.put('/api/bots/:id', asyncHandler(async (req, res) => {
   const bots = await loadBots();
   const existing = bots[req.params.id];
   if (!existing) return res.status(404).json({ error: 'Bot not found' });
@@ -381,10 +429,10 @@ app.put('/api/bots/:id', async (req, res) => {
 
   console.log(`✏️  Bot updated: "${updated.name}" (${req.params.id})`);
   res.json({ id: req.params.id, bot: updated });
-});
+}));
 
 // DELETE /api/bots/:id — Delete a bot
-app.delete('/api/bots/:id', async (req, res) => {
+app.delete('/api/bots/:id', asyncHandler(async (req, res) => {
   const bots = await loadBots();
   if (!bots[req.params.id]) return res.status(404).json({ error: 'Bot not found' });
   const name = bots[req.params.id].name;
@@ -392,21 +440,21 @@ app.delete('/api/bots/:id', async (req, res) => {
   await saveBots(bots);
   console.log(`🗑️  Bot deleted: "${name}" (${req.params.id})`);
   res.json({ success: true });
-});
+}));
 
 // ── Booking API Routes ───────────────────────────────────────────────────────
 
 // GET /api/bots/:id/bookings — Get all bookings for a specific bot
-app.get('/api/bots/:id/bookings', async (req, res) => {
+app.get('/api/bots/:id/bookings', asyncHandler(async (req, res) => {
   const bookings = await loadBookings();
   const botBookings = Object.values(bookings).filter(b => b.botId === req.params.id);
   // Sort newest first
   botBookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   res.json({ bookings: botBookings });
-});
+}));
 
 // POST /api/bots/:id/bookings — Add a booking for a specific bot
-app.post('/api/bots/:id/bookings', async (req, res) => {
+app.post('/api/bots/:id/bookings', asyncHandler(async (req, res) => {
   const bots = await loadBots();
   const bot = bots[req.params.id];
   // Allow bookings for 'DEMO' or temporary/unregistered bots in preview mode
@@ -449,10 +497,10 @@ app.post('/api/bots/:id/bookings', async (req, res) => {
   sendBookingEmails(targetBot, newBooking, serverBaseUrl);
 
   res.status(201).json({ success: true, booking: newBooking });
-});
+}));
 
 // DELETE /api/bookings/:id — Delete a booking
-app.delete('/api/bookings/:id', async (req, res) => {
+app.delete('/api/bookings/:id', asyncHandler(async (req, res) => {
   const bookings = await loadBookings();
   if (!bookings[req.params.id]) return res.status(404).json({ error: 'Booking not found' });
   const botId = bookings[req.params.id].botId;
@@ -460,10 +508,10 @@ app.delete('/api/bookings/:id', async (req, res) => {
   await saveBookings(bookings);
   console.log(`🗑️  Booking deleted: ${req.params.id}`);
   res.json({ success: true });
-});
+}));
 
 // DELETE /api/bots/:id/bookings — Clear all bookings for a specific bot
-app.delete('/api/bots/:id/bookings', async (req, res) => {
+app.delete('/api/bots/:id/bookings', asyncHandler(async (req, res) => {
   const bookings = await loadBookings();
   const filtered = {};
   Object.keys(bookings).forEach(key => {
@@ -474,11 +522,11 @@ app.delete('/api/bots/:id/bookings', async (req, res) => {
   await saveBookings(filtered);
   console.log(`🗑️  All bookings cleared for bot: ${req.params.id}`);
   res.json({ success: true });
-});
+}));
 
 // ── Server-Side Scraping API ─────────────────────────────────────────────────
 // GET /api/scrape?url=... — Fetch a URL server-side (bypasses browser CORS)
-app.get('/api/scrape', async (req, res) => {
+app.get('/api/scrape', asyncHandler(async (req, res) => {
   const targetUrl = req.query.url;
   if (!targetUrl) return res.status(400).json({ error: 'url query param required' });
 
@@ -488,10 +536,10 @@ app.get('/api/scrape', async (req, res) => {
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
-});
+}));
 
 // GET /api/scrape/links?url=... — Return all same-domain links found on a page
-app.get('/api/scrape/links', async (req, res) => {
+app.get('/api/scrape/links', asyncHandler(async (req, res) => {
   const targetUrl = req.query.url;
   if (!targetUrl) return res.status(400).json({ error: 'url query param required' });
 
@@ -526,7 +574,7 @@ app.get('/api/scrape/links', async (req, res) => {
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
-});
+}));
 
 // Helper: fetch a URL server-side, following redirects up to 5 times
 function serverFetch(url, redirectCount = 0) {
@@ -575,6 +623,12 @@ function serverFetch(url, redirectCount = 0) {
     req.end();
   });
 }
+
+// Global error handler middleware
+app.use((err, req, res, next) => {
+  console.error('🔴 Server error:', err);
+  res.status(500).json({ error: err.message || 'Internal Server Error' });
+});
 
 // ── Start Server / Export for Serverless ─────────────────────────────────────
 
