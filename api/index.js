@@ -508,7 +508,15 @@ app.get('/api/scrape/links', async (req, res) => {
       try {
         const abs = new WHATWG_URL(m[1], targetUrl);
         const clean = abs.origin + abs.pathname;
-        if (abs.hostname === baseObj.hostname && clean !== targetUrl && !/\.(pdf|zip|png|jpg|jpeg|docx|xml|css|js|webp|ico|svg|gif)$/i.test(abs.pathname)) {
+        const cleanPath = abs.pathname.toLowerCase();
+        const isWpOrFeed = /(wp-json|wp-content|wp-includes|wp-admin|xmlrpc)/i.test(cleanPath) ||
+                           /(\/feed\/?$|\/feed\/)/i.test(cleanPath) ||
+                           /(\/comments\/?$|\/comments\/)/i.test(cleanPath);
+                           
+        if (abs.hostname === baseObj.hostname && 
+            clean !== targetUrl && 
+            !/\.(pdf|zip|png|jpg|jpeg|docx|xml|css|js|webp|ico|svg|gif)$/i.test(abs.pathname) &&
+            !isWpOrFeed) {
           links.add(clean);
         }
       } catch (e) {}

@@ -640,8 +640,15 @@ document.addEventListener('DOMContentLoaded', () => {
           // Verify it is on the same host and has an html extension or no extension
           if (absoluteURL.host === baseURLObj.host) {
             const cleanPath = absoluteURL.pathname.toLowerCase();
-            // Avoid files (png, pdf, zip) and hash links
-            if (!/\.(pdf|zip|png|jpg|jpeg|docx|xml|css|js|webp)$/i.test(cleanPath) && absoluteURL.hash === '') {
+            
+            // Avoid files (png, pdf, zip), WordPress json/feed endpoints, and hash links
+            const isWpOrFeed = /(wp-json|wp-content|wp-includes|wp-admin|xmlrpc)/i.test(cleanPath) ||
+                               /(\/feed\/?$|\/feed\/)/i.test(cleanPath) ||
+                               /(\/comments\/?$|\/comments\/)/i.test(cleanPath);
+                               
+            if (!/\.(pdf|zip|png|jpg|jpeg|docx|xml|css|js|webp)$/i.test(cleanPath) && 
+                !isWpOrFeed && 
+                absoluteURL.hash === '') {
               // Standardize and normalize trailing slashes to avoid duplicates
               let normalized = absoluteURL.origin + absoluteURL.pathname;
               if (normalized.endsWith('/')) {
