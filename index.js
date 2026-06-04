@@ -175,6 +175,12 @@ INSTRUCTIONS:
       apiKeyInput.value = config.apiKey || 'DEMO';
       systemPromptInput.value = config.systemPrompt || '';
       
+      // Load manualData
+      manualDataInput.value = config.manualData || '';
+      
+      // Parse systemPrompt to recover lastScrapedDataText and lastScrapedDomain
+      parseLoadedSystemPrompt(config.systemPrompt || '');
+      
       // Update color preset dots state
       updatePresetDotsState(config.themeColor);
     }
@@ -195,7 +201,8 @@ INSTRUCTIONS:
       senderEmail: senderEmailInput.value,
 
       apiKey: apiKeyInput.value,
-      systemPrompt: systemPromptInput.value
+      systemPrompt: systemPromptInput.value,
+      manualData: manualDataInput.value
     };
     localStorage.setItem('luminabot_config', JSON.stringify(config));
   }
