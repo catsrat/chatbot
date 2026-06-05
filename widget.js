@@ -963,11 +963,46 @@
     const modelsToTry = [activeModel, 'gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
     const uniqueModels = Array.from(new Set(modelsToTry));
 
+    // Extract training data block from systemPrompt to pass as context in contents rather than systemInstructions.
+    // This removes heavy verbatim text from the core programming, drastically reducing recitation safety blocks.
+    let cleanSystemPrompt = config.systemPrompt;
+    let trainingData = '';
+    
+    const startTag = '---';
+    const trainingStart = config.systemPrompt.indexOf('WEBSITE TRAINING DATA:');
+    if (trainingStart !== -1) {
+      const trainingEnd = config.systemPrompt.indexOf('---', trainingStart + 22);
+      if (trainingEnd !== -1) {
+        trainingData = config.systemPrompt.substring(trainingStart + 'WEBSITE TRAINING DATA:'.length, trainingEnd).trim();
+        // Remove the training data block from the system prompt
+        const firstSeparator = config.systemPrompt.indexOf(startTag);
+        if (firstSeparator !== -1) {
+          cleanSystemPrompt = config.systemPrompt.substring(0, firstSeparator).trim() + 
+                              '\n\n' + 
+                              config.systemPrompt.substring(trainingEnd + startTag.length).trim();
+        }
+      }
+    }
+
+    const contents = [];
+    if (trainingData) {
+      contents.push({
+        role: 'user',
+        parts: [{ text: `Here is the website training data containing the menu, services, rates, and business details:\n\n${trainingData}\n\nPlease review this information to answer any questions.` }]
+      });
+      contents.push({
+        role: 'model',
+        parts: [{ text: `Understood. I have loaded and reviewed the website training data. I will answer all visitor inquiries accurately based on this information.` }]
+      });
+    }
+
     // Map history into Gemini's expected API format
-    const contents = chatHistory.map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.text }]
-    }));
+    chatHistory.forEach(msg => {
+      contents.push({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.text }]
+      });
+    });
 
     let lastError = null;
 
@@ -982,7 +1017,7 @@
           body: JSON.stringify({
             contents: contents,
             systemInstruction: {
-              parts: [{ text: config.systemPrompt }]
+              parts: [{ text: cleanSystemPrompt }]
             },
             generationConfig: {
               temperature: 0.7,
