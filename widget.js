@@ -1014,6 +1014,48 @@
           console.warn(`[LuminaBot] Gemini response finished with status: ${finishReason}`);
           if (finishReason === 'RECITATION') {
             console.warn(`[LuminaBot Tip] To prevent RECITATION truncation, instruct the bot to rephrase rather than copy training data verbatim.`);
+            
+            try {
+              console.log(`[LuminaBot] Attempting auto-rephrasing to complete the unfinished sentence.`);
+              const rephrasePrompt = `The AI assistant was answering a user's question but was cut off mid-sentence because it copied text too closely from the website training data.
+Here is the unfinished response: "${processedText}"
+
+Please complete and rephrase this response entirely in your own words.
+Rules:
+1. Do NOT copy the phrasing or structures from the website menu/prices verbatim.
+2. Translate all currency symbols (like €) to words or codes (like "Euros" or "EUR").
+3. Make sure the sentence is finished fully and naturally.
+4. Keep the response under 2-3 sentences.`;
+
+              const secondResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  contents: [{
+                    role: 'user',
+                    parts: [{ text: rephrasePrompt }]
+                  }],
+                  generationConfig: {
+                    temperature: 0.6,
+                    maxOutputTokens: 250
+                  }
+                })
+              });
+
+              if (secondResponse.ok) {
+                const secondData = await secondResponse.json();
+                const secondText = secondData.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (secondText && secondText.trim()) {
+                  console.log(`[LuminaBot] Rephrase recovery successful: "${secondText.trim()}"`);
+                  return secondText.trim();
+                }
+              }
+            } catch (err) {
+              console.error(`[LuminaBot] Auto-rephrase fallback failed:`, err);
+            }
+
             let trimmed = processedText.trim();
             // Clean up trailing prepositions, articles, quotes, or currency symbols cut off mid-sentence
             trimmed = trimmed.replace(/\s*(is|at|for|priced|costing|with|are|about|the|our|my|a|an)?\s*(€|\$|£|eur|usd|gbp|["'“‘])?$/i, '');
