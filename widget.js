@@ -668,6 +668,21 @@
       bookingContainer.style.maxWidth = '290px';
       bookingContainer.style.alignSelf = 'flex-start';
       
+      let prefilledNotes = '';
+      const queryMatch = text.match(/#book-form\?([^)\s"'>]+)/);
+      if (queryMatch) {
+        try {
+          const params = new URLSearchParams(queryMatch[1]);
+          if (params.has('items')) {
+            prefilledNotes = decodeURIComponent(params.get('items'));
+          } else if (params.has('notes')) {
+            prefilledNotes = decodeURIComponent(params.get('notes'));
+          }
+        } catch (e) {
+          console.warn('Failed to parse book-form query params:', e);
+        }
+      }
+
       const lowerText = text.toLowerCase();
       let formType = 'appointment';
       
@@ -754,7 +769,7 @@
           
           <div class="luminabot-booking-field">
             <label>${notesLabel}</label>
-            <textarea class="booking-notes" placeholder="${notesPlaceholder}" rows="2"></textarea>
+            <textarea class="booking-notes" placeholder="${notesPlaceholder}" rows="2">${prefilledNotes.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</textarea>
           </div>
           
           <button class="luminabot-booking-submit">${submitLabel}</button>
