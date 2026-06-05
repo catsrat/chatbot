@@ -1066,19 +1066,26 @@
         const finishReason = candidate?.finishReason;
         let processedText = text;
         if (finishReason && finishReason !== 'STOP') {
-          console.warn(`[LuminaBot] Gemini response finished with status: ${finishReason}. Performing immediate regex cleanup...`);
+          console.warn(`[LuminaBot] Gemini response finished with status: ${finishReason}. Silently trimming to last complete sentence...`);
           
           if (processedText && processedText.trim()) {
             let trimmed = processedText.trim();
-            // Clean up trailing prepositions, articles, quotes, or currency symbols cut off mid-sentence
-            trimmed = trimmed.replace(/\s*(is|at|for|priced|costing|with|are|about|the|our|my|a|an|to|in|of|and|but|or)?\s*(€|\$|£|eur|usd|gbp|["'“‘])?$/i, '');
-            if (!trimmed.endsWith('.') && !trimmed.endsWith('!') && !trimmed.endsWith('?')) {
-              trimmed += '.';
+            // Find the last complete sentence ending with . ! or ?
+            // This regex matches everything up to and including the last sentence-ending punctuation
+            const lastSentenceMatch = trimmed.match(/^([\s\S]*[.!?])/);
+            if (lastSentenceMatch && lastSentenceMatch[1].trim().length > 20) {
+              // Use only the complete portion
+              trimmed = lastSentenceMatch[1].trim();
+            } else {
+              // No complete sentence found — just add a period if missing
+              if (!trimmed.endsWith('.') && !trimmed.endsWith('!') && !trimmed.endsWith('?')) {
+                trimmed += '.';
+              }
             }
-            processedText = trimmed + " (Note: Some price/menu details were omitted. Please ask again or check details directly).";
+            processedText = trimmed;
           } else {
             // Completely empty or blocked from the first token
-            processedText = "I apologize, but I am unable to display that information right now. Would you like to check the website directly or schedule a call with us? [Book Appointment](" + (config.bookingMethod === 'builtin' ? '#book-form' : (config.calendlyUrl || '')) + ")";
+            processedText = "I apologize, but I am unable to display that information right now. Would you like to schedule a call with us? [Book Appointment](" + (config.bookingMethod === 'builtin' ? '#book-form' : (config.calendlyUrl || '')) + ")";
           }
         }
 
