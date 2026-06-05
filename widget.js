@@ -1015,8 +1015,8 @@
           if (finishReason === 'RECITATION') {
             console.warn(`[LuminaBot Tip] To prevent RECITATION truncation, instruct the bot to rephrase rather than copy training data verbatim.`);
             let trimmed = processedText.trim();
-            // Clean up trailing prepositions/currency symbols cut off mid-sentence
-            trimmed = trimmed.replace(/\s*(is|at|for|priced|costing|with|are|about)?\s*(€|\$|£|eur|usd|gbp)?$/i, '');
+            // Clean up trailing prepositions, articles, quotes, or currency symbols cut off mid-sentence
+            trimmed = trimmed.replace(/\s*(is|at|for|priced|costing|with|are|about|the|our|my|a|an)?\s*(€|\$|£|eur|usd|gbp|["'“‘])?$/i, '');
             processedText = trimmed + " (Note: Some price/menu details were omitted. Please ask again or check details directly).";
           }
         }
