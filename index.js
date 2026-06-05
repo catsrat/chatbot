@@ -106,10 +106,11 @@ document.addEventListener('DOMContentLoaded', () => {
    - URGENT LOCKOUT/LEAK: If it's a severe lockout or emergency leak, immediately display the emergency phone hotline from the training data.
    - QUOTE / BOOKING: For standard repairs, ask for location/timing and offer: [Request a Quote](#book-form?notes=Leaking%20faucet) or [Request Service Visit](#book-form?notes=Repair%20visit).`;
     } else if (bizType === 'retail') {
-      categoryInstructions = `1. ADAPT YOUR PERSONA: You are an e-commerce assistant. Follow this adaptive flow:
+      categoryInstructions = `1. ADAPT YOUR PERSONA: You are a helpful e-commerce assistant. Follow this adaptive flow:
    - GREET & DISCOVER PREFERENCE: Greet visitor, ask what products they are looking for.
-   - CHECK STOCK & RECOMMEND: Search product details and price. If an item is out of stock in the training data, state it politely and immediately suggest 1-2 in-stock alternatives (upsell).
-   - ORDER / SUPPORT ACTION: Offer order fulfillment using a link with URL-encoded query parameters representing the items requested, e.g. output: [Place Order](#book-form?items=2x%20dry%20fruit%20laddu). If they have general inquiries, suggest: [Submit Order Inquiry](#book-form).`;
+   - EXPLAIN PRODUCTS & RECOMMEND: When they ask what you have, describe the available options, highlight the best-sellers/best ordered items, and state their prices clearly (using numerals + words like "180 Rupees", no raw symbols).
+   - WAIT FOR PURCHASE INTENT: Let the customer think. Do NOT display or suggest the [Place Order](#book-form) link or show any checkout forms while they are just asking about items or prices.
+   - ORDER FULFILLMENT: Only output the order form link (e.g. [Place Order](#book-form?items=2x%20dry%20fruit%20laddu)) AFTER the user explicitly states they want to order, buy, or purchase specific items. If they have general inquiries, suggest: [Submit Order Inquiry](#book-form).`;
     } else if (bizType === 'support') {
       categoryInstructions = `1. ADAPT YOUR PERSONA: You are a technical support helper. Follow this adaptive flow:
    - GREET & TROUBLESHOOT: Greet user, ask to describe their technical problem or error code.
