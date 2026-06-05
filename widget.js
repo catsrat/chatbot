@@ -960,8 +960,8 @@
     }
 
     // Call actual Gemini API with fallback pipeline
-    const modelsToTry = [activeModel, 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
-    const uniqueModels = Array.from(new Set(modelsToTry));
+    const modelsToTry = [activeModel, 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    const uniqueModels = [...new Set(modelsToTry)];
 
     // Extract training data block from systemPrompt to pass as context in contents rather than systemInstructions.
     // This removes heavy verbatim text from the core programming, drastically reducing recitation safety blocks.
@@ -1021,22 +1021,25 @@
     for (const modelName of uniqueModels) {
       try {
         console.log(`Attempting Gemini API request using model: ${modelName}`);
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            contents: contents,
-            systemInstruction: {
-              parts: [{ text: cleanSystemPrompt }]
-            },
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 1024
-            }
-          })
-        });
+        // Abort if Gemini takes longer than 15 seconds
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+        let response;
+        try {
+          response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({
+              contents: contents,
+              systemInstruction: { parts: [{ text: cleanSystemPrompt }] },
+              generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+            })
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
@@ -1101,6 +1104,13 @@
 
         return processedText;
       } catch (error) {
+        // Timeout (AbortError) — just try the next model
+        if (error.name === 'AbortError') {
+          console.warn(`Model ${modelName} timed out after 15s, trying next...`);
+          lastError = new Error(`Request timed out for model ${modelName}`);
+          continue;
+        }
+
         console.error(`Gemini API call failed for ${modelName}:`, error);
         lastError = error;
         
