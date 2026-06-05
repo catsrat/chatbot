@@ -991,21 +991,29 @@
       }
     }
 
-    // Map history into Gemini's expected API format, prepending the training data context
-    // to the very first user message. This preserves strictly alternating roles (user -> model -> user).
-    let trainingDataPrepended = false;
+    // Map history into Gemini's expected API format, merging consecutive messages of the same role
+    // to strictly satisfy alternating roles (user -> model -> user) and prepending training data.
     const contents = [];
+    let trainingDataPrepended = false;
     
     chatHistory.forEach(msg => {
+      const role = msg.role === 'user' ? 'user' : 'model';
       let textToSubmit = msg.text;
+      
       if (msg.role === 'user' && !trainingDataPrepended && trainingData) {
         textToSubmit = `[Website Context / Training Data for Reference]\n${trainingData}\n\n[Visitor Query]\n${msg.text}`;
         trainingDataPrepended = true;
       }
-      contents.push({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: textToSubmit }]
-      });
+      
+      if (contents.length > 0 && contents[contents.length - 1].role === role) {
+        // Merge consecutive messages of the same role to satisfy strict alternating roles schema
+        contents[contents.length - 1].parts[0].text += '\n\n' + textToSubmit;
+      } else {
+        contents.push({
+          role: role,
+          parts: [{ text: textToSubmit }]
+        });
+      }
     });
 
     let lastError = null;
@@ -1034,11 +1042,14 @@
           const errorData = await response.json().catch(() => ({}));
           const errMsg = errorData.error?.message || `API error: ${response.status}`;
           console.warn(`Model ${modelName} failed: ${errMsg}`);
-          lastError = new Error(errMsg);
+          
+          const err = new Error(errMsg);
+          err.status = response.status;
+          lastError = err;
           
           // Throw immediately and abort model retries on key/permission/rate-limit blocks
           if (response.status === 429 || response.status === 403 || response.status === 400) {
-            throw lastError;
+            throw err;
           }
           continue;
         }
@@ -1086,7 +1097,11 @@
         console.error(`Gemini API call failed for ${modelName}:`, error);
         lastError = error;
         
-        // If the error was thrown due to 429/403/400 (not network error), propagate it to stop loop
+        // Propagate key, permission, validation, or rate limit blocks immediately to stop retry loop
+        if (error.status === 429 || error.status === 403 || error.status === 400) {
+          throw error;
+        }
+        
         if (error.message && (error.message.includes('429') || error.message.includes('403') || error.message.includes('400') || error.message.includes('API key') || error.message.includes('quota'))) {
           throw error;
         }
