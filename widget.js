@@ -1011,13 +1011,12 @@
         const finishReason = candidate?.finishReason;
         let processedText = text;
         if (finishReason && finishReason !== 'STOP') {
-          console.warn(`[LuminaBot] Gemini response finished with status: ${finishReason}`);
-          if (finishReason === 'RECITATION') {
-            console.warn(`[LuminaBot Tip] To prevent RECITATION truncation, instruct the bot to rephrase rather than copy training data verbatim.`);
-            
+          console.warn(`[LuminaBot] Gemini response finished with status: ${finishReason}. Attempting automatic recovery...`);
+          
+          if (processedText && processedText.trim()) {
             try {
               console.log(`[LuminaBot] Attempting auto-rephrasing to complete the unfinished sentence.`);
-              const rephrasePrompt = `The AI assistant was answering a user's question but was cut off mid-sentence because it copied text too closely from the website training data.
+              const rephrasePrompt = `The AI assistant was answering a user's question but was cut off mid-sentence because of a safety or recitation filter.
 Here is the unfinished response: "${processedText}"
 
 Please complete and rephrase this response entirely in your own words.
@@ -1060,6 +1059,9 @@ Rules:
             // Clean up trailing prepositions, articles, quotes, or currency symbols cut off mid-sentence
             trimmed = trimmed.replace(/\s*(is|at|for|priced|costing|with|are|about|the|our|my|a|an)?\s*(€|\$|£|eur|usd|gbp|["'“‘])?$/i, '');
             processedText = trimmed + " (Note: Some price/menu details were omitted. Please ask again or check details directly).";
+          } else {
+            // Completely empty or blocked from the first token
+            processedText = "I apologize, but I am unable to display that information right now. Would you like to check the website directly or schedule a call with us? [Book Appointment](" + (config.bookingMethod === 'builtin' ? '#book-form' : (config.calendlyUrl || '')) + ")";
           }
         }
 
