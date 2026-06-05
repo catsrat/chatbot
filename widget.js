@@ -987,23 +987,20 @@
       }
     }
 
+    // Map history into Gemini's expected API format, prepending the training data context
+    // to the very first user message. This preserves strictly alternating roles (user -> model -> user).
+    let trainingDataPrepended = false;
     const contents = [];
-    if (trainingData) {
-      contents.push({
-        role: 'user',
-        parts: [{ text: `Here is the website training data containing the menu, services, rates, and business details:\n\n${trainingData}\n\nPlease review this information to answer any questions.` }]
-      });
-      contents.push({
-        role: 'model',
-        parts: [{ text: `Understood. I have loaded and reviewed the website training data. I will answer all visitor inquiries accurately based on this information.` }]
-      });
-    }
-
-    // Map history into Gemini's expected API format
+    
     chatHistory.forEach(msg => {
+      let textToSubmit = msg.text;
+      if (msg.role === 'user' && !trainingDataPrepended && trainingData) {
+        textToSubmit = `[Website Context / Training Data for Reference]\n${trainingData}\n\n[Visitor Query]\n${msg.text}`;
+        trainingDataPrepended = true;
+      }
       contents.push({
         role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.text }]
+        parts: [{ text: textToSubmit }]
       });
     });
 
