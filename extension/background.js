@@ -91,16 +91,44 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'FETCH_URL') {
     (async () => {
       try {
-        // Try background tab rendering first for client-side JS / Wix support
-        const html = await fetchRenderedHTML(message.url);
-        sendResponse({ html });
+        if (message.url.toLowerCase().endsWith('.pdf')) {
+          console.log(`Extension background script fetching PDF binary: ${message.url}`);
+          const res = await fetch(message.url);
+          if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
+          const buffer = await res.arrayBuffer();
+          // Convert arrayBuffer to Base64 safely
+          const bytes = new Uint8Array(buffer);
+          let binaryString = '';
+          const chunkSize = 8192;
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            binaryString += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+          }
+          const base64 = btoa(binaryString);
+          sendResponse({ pdfBase64: base64 });
+        } else {
+          // Try background tab rendering first for client-side JS / Wix support
+          const html = await fetchRenderedHTML(message.url);
+          sendResponse({ html });
+        }
       } catch (err) {
         console.warn(`Headless background render failed, falling back to static fetch:`, err);
         try {
           const res = await fetch(message.url);
           if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
-          const html = await res.text();
-          sendResponse({ html });
+          if (message.url.toLowerCase().endsWith('.pdf')) {
+            const buffer = await res.arrayBuffer();
+            const bytes = new Uint8Array(buffer);
+            let binaryString = '';
+            const chunkSize = 8192;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+              binaryString += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+            }
+            const base64 = btoa(binaryString);
+            sendResponse({ pdfBase64: base64 });
+          } else {
+            const html = await res.text();
+            sendResponse({ html });
+          }
         } catch (fetchErr) {
           console.error('Static fetch fallback also failed:', fetchErr);
           sendResponse({ error: fetchErr.message });

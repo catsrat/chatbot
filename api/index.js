@@ -531,8 +531,12 @@ app.get('/api/scrape', asyncHandler(async (req, res) => {
   if (!targetUrl) return res.status(400).json({ error: 'url query param required' });
 
   try {
-    const html = await serverFetch(targetUrl);
-    res.type('text/html').send(html);
+    const buffer = await serverFetch(targetUrl);
+    if (targetUrl.toLowerCase().endsWith('.pdf')) {
+      res.type('application/pdf').send(buffer);
+    } else {
+      res.type('text/html').send(buffer.toString('utf8'));
+    }
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
@@ -544,7 +548,8 @@ app.get('/api/scrape/links', asyncHandler(async (req, res) => {
   if (!targetUrl) return res.status(400).json({ error: 'url query param required' });
 
   try {
-    const html = await serverFetch(targetUrl);
+    const buffer = await serverFetch(targetUrl);
+    const html = buffer.toString('utf8');
     const { URL: WHATWG_URL } = require('url');
     const baseObj = new WHATWG_URL(targetUrl);
     
@@ -563,7 +568,7 @@ app.get('/api/scrape/links', asyncHandler(async (req, res) => {
                            
         if (abs.hostname === baseObj.hostname && 
             clean !== targetUrl && 
-            !/\.(pdf|zip|png|jpg|jpeg|docx|xml|css|js|webp|ico|svg|gif)$/i.test(abs.pathname) &&
+            !/\.(zip|png|jpg|jpeg|docx|xml|css|js|webp|ico|svg|gif)$/i.test(abs.pathname) &&
             !isWpOrFeed) {
           links.add(clean);
         }
@@ -591,7 +596,7 @@ function serverFetch(url, redirectCount = 0) {
       method: 'GET',
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; LuminaBot-Scraper/1.0)',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8,application/pdf',
         'Accept-Language': 'en-US,en;q=0.5',
         'Accept-Encoding': 'identity', // avoid gzip to keep things simple
         'Connection': 'close'
@@ -612,10 +617,9 @@ function serverFetch(url, redirectCount = 0) {
         return reject(new Error(`HTTP ${resp.statusCode} for ${url}`));
       }
       
-      let body = '';
-      resp.setEncoding('utf8');
-      resp.on('data', chunk => { body += chunk; });
-      resp.on('end', () => resolve(body));
+      const chunks = [];
+      resp.on('data', chunk => { chunks.push(chunk); });
+      resp.on('end', () => resolve(Buffer.concat(chunks)));
     });
     
     req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')); });

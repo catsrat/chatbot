@@ -374,7 +374,10 @@ INSTRUCTIONS:
           if (event.data.error) {
             reject(new Error(event.data.error));
           } else {
-            resolve(event.data.html);
+            resolve({
+              html: event.data.html || null,
+              pdfBase64: event.data.pdfBase64 || null
+            });
           }
         }
       };
@@ -395,13 +398,131 @@ INSTRUCTIONS:
     });
   }
 
+  function base64ToArrayBuffer(base64) {
+    const binaryString = atob(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+
+  async function parsePDFText(arrayBuffer) {
+    if (typeof window['pdfjs-dist/build/pdf'] === 'undefined') {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+
+    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
+    const pdf = await loadingTask.promise;
+    let fullText = '';
+    const maxPages = Math.min(pdf.numPages, 10);
+    for (let i = 1; i <= maxPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const strings = content.items.map(item => item.str);
+      fullText += strings.join(' ') + '\n';
+    }
+    return fullText;
+  }
+
+  async function fetchPDFData(url) {
+    if (checkExtensionStatus()) {
+      try {
+        console.log(`Attempting PDF fetch via extension helper for: ${url}`);
+        const result = await fetchViaExtension(url);
+        if (result && result.pdfBase64) {
+          return base64ToArrayBuffer(result.pdfBase64);
+        }
+      } catch (err) {
+        console.warn(`Extension PDF fetch failed for ${url}, falling back to server scraper:`, err);
+      }
+    }
+
+    try {
+      console.log(`Attempting server-side PDF fetch for: ${url}`);
+      const proxyUrl = `${window.location.origin}/api/scrape?url=${encodeURIComponent(url)}`;
+      const response = await fetch(proxyUrl);
+      if (response.ok) {
+        return await response.arrayBuffer();
+      }
+    } catch (err) {
+      console.warn(`Server PDF fetch failed for ${url}, trying direct:`, err);
+    }
+
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+    return await response.arrayBuffer();
+  }
+
+  async function discoverSitemapLinks(baseUrl) {
+    try {
+      const urlObj = new URL(baseUrl);
+      const sitemapUrl = `${urlObj.origin}/sitemap.xml`;
+      console.log(`Attempting to discover sitemap at: ${sitemapUrl}`);
+      
+      const xmlText = await fetchPageHTML(sitemapUrl);
+      if (!xmlText || xmlText.trim().length < 20 || (!xmlText.includes('<url>') && !xmlText.includes('<sitemap>'))) {
+        console.log('No valid sitemap content found.');
+        return [];
+      }
+      
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+      
+      // Check if it is a sitemap index
+      const sitemaps = xmlDoc.getElementsByTagName('sitemap');
+      if (sitemaps.length > 0) {
+        console.log(`Sitemap index detected with ${sitemaps.length} sub-sitemaps.`);
+        const subLinks = [];
+        for (let i = 0; i < Math.min(sitemaps.length, 2); i++) {
+          const locEl = sitemaps[i].getElementsByTagName('loc')[0];
+          if (locEl) {
+            const subLinksBatch = await discoverSitemapLinks(locEl.textContent.trim());
+            subLinks.push(...subLinksBatch);
+          }
+        }
+        return subLinks;
+      }
+      
+      const locElements = xmlDoc.getElementsByTagName('loc');
+      const links = [];
+      
+      for (let i = 0; i < locElements.length; i++) {
+        try {
+          const loc = locElements[i].textContent.trim();
+          const locObj = new URL(loc);
+          if (locObj.host === urlObj.host) {
+            links.push(locObj.origin + locObj.pathname);
+          }
+        } catch (e) {}
+      }
+      
+      console.log(`Discovered ${links.length} links from sitemap`);
+      return links;
+    } catch (err) {
+      console.warn('Sitemap discovery failed:', err);
+      return [];
+    }
+  }
+
   // 8. Fetch page content via robust fallback pipeline (Extension -> Direct -> CORS Proxies)
   async function fetchPageHTML(url) {
     // Try 0: Chrome Extension Scraper Helper (if installed, completely bypasses CORS and CDN blocks)
     if (checkExtensionStatus()) {
       try {
         console.log(`Attempting fetch via extension helper for: ${url}`);
-        const text = await fetchViaExtension(url);
+        const result = await fetchViaExtension(url);
+        const text = result?.html || '';
         if (text && text.trim().length > 100) {
           console.log(`Extension fetch succeeded for ${url}`);
           return text;
@@ -691,7 +812,10 @@ INSTRUCTIONS:
     updateWidgetPreview(true);
 
     try {
-      // 1. Scrape Homepage
+      // 1. Scrape Homepage & Discover Links via Sitemap
+      const sitemapLinks = await discoverSitemapLinks(url);
+      const internalLinks = new Set(sitemapLinks);
+      
       const homeHTML = await fetchPageHTML(url);
       const homeText = cleanHTMLText(homeHTML);
       
@@ -702,44 +826,63 @@ INSTRUCTIONS:
       });
       renderCrawledPagesList();
 
-      // Parse links on homepage to find internal pages
-      const parser = new DOMParser();
-      const homeDoc = parser.parseFromString(homeHTML, 'text/html');
-      const anchors = Array.from(homeDoc.querySelectorAll('a[href]'));
-      
       const baseURLObj = new URL(url);
       let cleanBaseUrl = url.endsWith('/') ? url.slice(0, -1) : url;
-      const internalLinks = new Set();
-      
-      anchors.forEach(a => {
-        try {
-          const href = a.getAttribute('href');
-          const absoluteURL = new URL(href, url);
-          
-          // Verify it is on the same host and has an html extension or no extension
-          if (absoluteURL.host === baseURLObj.host) {
-            const cleanPath = absoluteURL.pathname.toLowerCase();
+
+      // If sitemap didn't yield any links, fall back to parsing anchors from homepage HTML
+      if (internalLinks.size === 0) {
+        console.log('No links from sitemap.xml. Falling back to homepage anchor extraction...');
+        const parser = new DOMParser();
+        const homeDoc = parser.parseFromString(homeHTML, 'text/html');
+        const anchors = Array.from(homeDoc.querySelectorAll('a[href]'));
+        
+        anchors.forEach(a => {
+          try {
+            const href = a.getAttribute('href');
+            const absoluteURL = new URL(href, url);
             
-            // Avoid files (png, pdf, zip), WordPress json/feed endpoints, and hash links
+            // Verify it is on the same host and is not an excluded file format
+            if (absoluteURL.host === baseURLObj.host) {
+              const cleanPath = absoluteURL.pathname.toLowerCase();
+              const isWpOrFeed = /(wp-json|wp-content|wp-includes|wp-admin|xmlrpc)/i.test(cleanPath) ||
+                                 /(\/feed\/?$|\/feed\/)/i.test(cleanPath) ||
+                                 /(\/comments\/?$|\/comments\/)/i.test(cleanPath);
+                                 
+              if (!/\.(zip|png|jpg|jpeg|docx|xml|css|js|webp)$/i.test(cleanPath) && 
+                  !isWpOrFeed && 
+                  absoluteURL.hash === '') {
+                // Standardize and normalize trailing slashes to avoid duplicates
+                let normalized = absoluteURL.origin + absoluteURL.pathname;
+                if (normalized.endsWith('/')) {
+                  normalized = normalized.slice(0, -1);
+                }
+                if (normalized !== cleanBaseUrl) {
+                  internalLinks.add(normalized);
+                }
+              }
+            }
+          } catch (e) {}
+        });
+      } else {
+        // Sanitize and filter discovered sitemap links (excluding non-text resources)
+        const filteredSitemapLinks = Array.from(internalLinks).filter(link => {
+          try {
+            const absoluteURL = new URL(link);
+            const cleanPath = absoluteURL.pathname.toLowerCase();
             const isWpOrFeed = /(wp-json|wp-content|wp-includes|wp-admin|xmlrpc)/i.test(cleanPath) ||
                                /(\/feed\/?$|\/feed\/)/i.test(cleanPath) ||
                                /(\/comments\/?$|\/comments\/)/i.test(cleanPath);
-                               
-            if (!/\.(pdf|zip|png|jpg|jpeg|docx|xml|css|js|webp)$/i.test(cleanPath) && 
-                !isWpOrFeed && 
-                absoluteURL.hash === '') {
-              // Standardize and normalize trailing slashes to avoid duplicates
-              let normalized = absoluteURL.origin + absoluteURL.pathname;
-              if (normalized.endsWith('/')) {
-                normalized = normalized.slice(0, -1);
-              }
-              if (normalized !== cleanBaseUrl) {
-                internalLinks.add(normalized);
-              }
-            }
+            return !/\.(zip|png|jpg|jpeg|docx|xml|css|js|webp)$/i.test(cleanPath) && 
+                   !isWpOrFeed && 
+                   absoluteURL.hash === '' &&
+                   (absoluteURL.origin + absoluteURL.pathname) !== cleanBaseUrl;
+          } catch(e) {
+            return false;
           }
-        } catch (e) {}
-      });
+        });
+        internalLinks.clear();
+        filteredSitemapLinks.forEach(link => internalLinks.add(link));
+      }
 
       // Rank links to prioritize critical pages (services, pricing, menus, listings, portfolio, contact) across both English and German
       const rankedLinks = Array.from(internalLinks).map(link => {
@@ -790,39 +933,59 @@ INSTRUCTIONS:
 
       let trainingDataText = `Homepage:\n${homeText.substring(0, 6000)}\n\n`;
 
-      // 2. Scrape internal subpages sequentially to avoid proxy rate limit issues
-      for (let i = 0; i < topLinks.length; i++) {
-        const subUrl = topLinks[i];
-        let pathName = subUrl;
-        try {
-          pathName = new URL(subUrl).pathname;
-        } catch (e) {}
-
-        scrapeStatus.textContent = `Scraping: ${pathName} (${i + 1}/${topLinks.length})`;
+      // 2. Scrape internal subpages concurrently in batches of 4
+      const concurrency = 4;
+      const scrapedTexts = new Array(topLinks.length);
+      
+      for (let i = 0; i < topLinks.length; i += concurrency) {
+        const batch = topLinks.slice(i, i + concurrency);
+        scrapeStatus.textContent = `Scraping: Batch ${Math.floor(i / concurrency) + 1}/${Math.ceil(topLinks.length / concurrency)}...`;
         
-        try {
-          const subHTML = await fetchPageHTML(subUrl);
-          const subText = cleanHTMLText(subHTML);
+        await Promise.all(batch.map(async (subUrl, idx) => {
+          const overallIndex = i + idx;
+          let pathName = subUrl;
+          try {
+            pathName = new URL(subUrl).pathname;
+          } catch (e) {}
           
-          crawledPages.push({
-            url: subUrl,
-            title: `${pathName}`,
-            status: 'Success'
-          });
-          renderCrawledPagesList();
+          try {
+            let subText = '';
+            if (subUrl.toLowerCase().endsWith('.pdf')) {
+              console.log(`Scraping PDF: ${subUrl}`);
+              const arrayBuffer = await fetchPDFData(subUrl);
+              subText = await parsePDFText(arrayBuffer);
+            } else {
+              const subHTML = await fetchPageHTML(subUrl);
+              subText = cleanHTMLText(subHTML);
+            }
+            
+            crawledPages.push({
+              url: subUrl,
+              title: `${pathName}`,
+              status: 'Success'
+            });
+            
+            scrapedTexts[overallIndex] = `Page: ${pathName}\n${subText.substring(0, 5000)}\n\n`;
+          } catch (e) {
+            console.warn(`Failed to crawl subpage ${subUrl}:`, e);
+            crawledPages.push({
+              url: subUrl,
+              title: `${pathName}`,
+              status: 'Failed'
+            });
+          }
+        }));
+        
+        renderCrawledPagesList();
+        // brief pause to let browser main thread yield
+        await new Promise(r => setTimeout(r, 100));
+      }
 
-          trainingDataText += `Page: ${pathName}\n${subText.substring(0, 5000)}\n\n`;
-        } catch (e) {
-          console.warn(`Failed to crawl subpage ${subUrl}:`, e);
-          crawledPages.push({
-            url: subUrl,
-            title: `${pathName}`,
-            status: 'Failed'
-          });
-          renderCrawledPagesList();
+      // Combine scraped page contents preserving priority order
+      for (let i = 0; i < scrapedTexts.length; i++) {
+        if (scrapedTexts[i]) {
+          trainingDataText += scrapedTexts[i];
         }
-        // Brief sleep to yield and prevent rate limits
-        await new Promise(r => setTimeout(r, 400));
       }
 
       // Cache base scraped text and domain so manual data updates can rebuild in real-time without re-scraping
