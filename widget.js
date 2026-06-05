@@ -1009,10 +1009,15 @@
         }
 
         const finishReason = candidate?.finishReason;
+        let processedText = text;
         if (finishReason && finishReason !== 'STOP') {
           console.warn(`[LuminaBot] Gemini response finished with status: ${finishReason}`);
           if (finishReason === 'RECITATION') {
             console.warn(`[LuminaBot Tip] To prevent RECITATION truncation, instruct the bot to rephrase rather than copy training data verbatim.`);
+            let trimmed = processedText.trim();
+            // Clean up trailing prepositions/currency symbols cut off mid-sentence
+            trimmed = trimmed.replace(/\s*(is|at|for|priced|costing|with|are|about)?\s*(€|\$|£|eur|usd|gbp)?$/i, '');
+            processedText = trimmed + " (Note: Some price/menu details were omitted. Please ask again or check details directly).";
           }
         }
 
@@ -1026,7 +1031,7 @@
           fallbackModelEl.textContent = `Gemini (${modelName})`;
         }
 
-        return text;
+        return processedText;
       } catch (error) {
         console.error(`Gemini API call failed for ${modelName}:`, error);
         lastError = error;
