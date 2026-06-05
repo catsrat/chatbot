@@ -968,18 +968,21 @@
     let cleanSystemPrompt = config.systemPrompt;
     let trainingData = '';
     
-    const startTag = '---';
     const trainingStart = config.systemPrompt.indexOf('WEBSITE TRAINING DATA:');
     if (trainingStart !== -1) {
-      const trainingEnd = config.systemPrompt.indexOf('---', trainingStart + 22);
-      if (trainingEnd !== -1) {
-        trainingData = config.systemPrompt.substring(trainingStart + 'WEBSITE TRAINING DATA:'.length, trainingEnd).trim();
-        // Remove the training data block from the system prompt
-        const firstSeparator = config.systemPrompt.indexOf(startTag);
-        if (firstSeparator !== -1) {
-          cleanSystemPrompt = config.systemPrompt.substring(0, firstSeparator).trim() + 
-                              '\n\n' + 
-                              config.systemPrompt.substring(trainingEnd + startTag.length).trim();
+      const instructionsStart = config.systemPrompt.indexOf('INSTRUCTIONS:');
+      if (instructionsStart !== -1) {
+        // Find the separator --- right before INSTRUCTIONS:
+        const beforeInstructions = config.systemPrompt.lastIndexOf('---', instructionsStart);
+        if (beforeInstructions !== -1 && beforeInstructions > trainingStart) {
+          trainingData = config.systemPrompt.substring(trainingStart + 'WEBSITE TRAINING DATA:'.length, beforeInstructions).trim();
+          // Remove the training data block from the system prompt
+          const firstSeparator = config.systemPrompt.indexOf('---');
+          if (firstSeparator !== -1 && firstSeparator < trainingStart) {
+            cleanSystemPrompt = config.systemPrompt.substring(0, firstSeparator).trim() + 
+                                '\n\n' + 
+                                config.systemPrompt.substring(instructionsStart).trim();
+          }
         }
       }
     }
