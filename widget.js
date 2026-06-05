@@ -1000,11 +1000,20 @@
         }
 
         const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const candidate = data.candidates?.[0];
+        const text = candidate?.content?.parts?.[0]?.text;
         
         if (!text) {
           lastError = new Error("No response generated from the AI model.");
           continue;
+        }
+
+        const finishReason = candidate?.finishReason;
+        if (finishReason && finishReason !== 'STOP') {
+          console.warn(`[LuminaBot] Gemini response finished with status: ${finishReason}`);
+          if (finishReason === 'RECITATION') {
+            console.warn(`[LuminaBot Tip] To prevent RECITATION truncation, instruct the bot to rephrase rather than copy training data verbatim.`);
+          }
         }
 
         // Cache the working model
