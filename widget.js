@@ -960,7 +960,7 @@
     }
 
     // Call actual Gemini API with fallback pipeline
-    const modelsToTry = [activeModel, 'gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
+    const modelsToTry = [activeModel, 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
     const uniqueModels = Array.from(new Set(modelsToTry));
 
     // Extract training data block from systemPrompt to pass as context in contents rather than systemInstructions.
@@ -972,18 +972,22 @@
     if (trainingStart !== -1) {
       const instructionsStart = config.systemPrompt.indexOf('INSTRUCTIONS:');
       if (instructionsStart !== -1) {
-        // Find the separator --- right before INSTRUCTIONS:
-        const beforeInstructions = config.systemPrompt.lastIndexOf('---', instructionsStart);
-        if (beforeInstructions !== -1 && beforeInstructions > trainingStart) {
-          trainingData = config.systemPrompt.substring(trainingStart + 'WEBSITE TRAINING DATA:'.length, beforeInstructions).trim();
-          // Remove the training data block from the system prompt
-          const firstSeparator = config.systemPrompt.indexOf('---');
-          if (firstSeparator !== -1 && firstSeparator < trainingStart) {
-            cleanSystemPrompt = config.systemPrompt.substring(0, firstSeparator).trim() + 
-                                '\n\n' + 
-                                config.systemPrompt.substring(instructionsStart).trim();
-          }
+        let beforeInstructions = config.systemPrompt.lastIndexOf('---', instructionsStart);
+        if (beforeInstructions === -1 || beforeInstructions < trainingStart) {
+          beforeInstructions = instructionsStart;
         }
+        trainingData = config.systemPrompt.substring(trainingStart + 'WEBSITE TRAINING DATA:'.length, beforeInstructions).trim();
+        
+        let firstSeparator = config.systemPrompt.indexOf('---');
+        if (firstSeparator === -1 || firstSeparator > trainingStart) {
+          firstSeparator = trainingStart;
+        }
+        cleanSystemPrompt = config.systemPrompt.substring(0, firstSeparator).trim() + 
+                            '\n\n' + 
+                            config.systemPrompt.substring(instructionsStart).trim();
+      } else {
+        trainingData = config.systemPrompt.substring(trainingStart + 'WEBSITE TRAINING DATA:'.length).trim();
+        cleanSystemPrompt = config.systemPrompt.substring(0, trainingStart).trim();
       }
     }
 
@@ -1029,8 +1033,13 @@
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           const errMsg = errorData.error?.message || `API error: ${response.status}`;
-          console.warn(`Model ${modelName} failed, trying next: ${errMsg}`);
+          console.warn(`Model ${modelName} failed: ${errMsg}`);
           lastError = new Error(errMsg);
+          
+          // Throw immediately and abort model retries on key/permission/rate-limit blocks
+          if (response.status === 429 || response.status === 403 || response.status === 400) {
+            throw lastError;
+          }
           continue;
         }
 
@@ -1046,53 +1055,15 @@
         const finishReason = candidate?.finishReason;
         let processedText = text;
         if (finishReason && finishReason !== 'STOP') {
-          console.warn(`[LuminaBot] Gemini response finished with status: ${finishReason}. Attempting automatic recovery...`);
+          console.warn(`[LuminaBot] Gemini response finished with status: ${finishReason}. Performing immediate regex cleanup...`);
           
           if (processedText && processedText.trim()) {
-            try {
-              console.log(`[LuminaBot] Attempting auto-rephrasing to complete the unfinished sentence.`);
-              const rephrasePrompt = `The AI assistant was answering a user's question but was cut off mid-sentence because of a safety or recitation filter.
-Here is the unfinished response: "${processedText}"
-
-Please complete and rephrase this response entirely in your own words.
-Rules:
-1. Do NOT copy the phrasing or structures from the website menu/prices verbatim.
-2. Translate all currency symbols (like €) to words or codes (like "Euros" or "EUR").
-3. Make sure the sentence is finished fully and naturally.
-4. Keep the response under 2-3 sentences.`;
-
-              const secondResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  contents: [{
-                    role: 'user',
-                    parts: [{ text: rephrasePrompt }]
-                  }],
-                  generationConfig: {
-                    temperature: 0.6,
-                    maxOutputTokens: 250
-                  }
-                })
-              });
-
-              if (secondResponse.ok) {
-                const secondData = await secondResponse.json();
-                const secondText = secondData.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (secondText && secondText.trim()) {
-                  console.log(`[LuminaBot] Rephrase recovery successful: "${secondText.trim()}"`);
-                  return secondText.trim();
-                }
-              }
-            } catch (err) {
-              console.error(`[LuminaBot] Auto-rephrase fallback failed:`, err);
-            }
-
             let trimmed = processedText.trim();
             // Clean up trailing prepositions, articles, quotes, or currency symbols cut off mid-sentence
-            trimmed = trimmed.replace(/\s*(is|at|for|priced|costing|with|are|about|the|our|my|a|an)?\s*(€|\$|£|eur|usd|gbp|["'“‘])?$/i, '');
+            trimmed = trimmed.replace(/\s*(is|at|for|priced|costing|with|are|about|the|our|my|a|an|to|in|of|and|but|or)?\s*(€|\$|£|eur|usd|gbp|["'“‘])?$/i, '');
+            if (!trimmed.endsWith('.') && !trimmed.endsWith('!') && !trimmed.endsWith('?')) {
+              trimmed += '.';
+            }
             processedText = trimmed + " (Note: Some price/menu details were omitted. Please ask again or check details directly).";
           } else {
             // Completely empty or blocked from the first token
@@ -1114,7 +1085,11 @@ Rules:
       } catch (error) {
         console.error(`Gemini API call failed for ${modelName}:`, error);
         lastError = error;
-        // Continue to the next model
+        
+        // If the error was thrown due to 429/403/400 (not network error), propagate it to stop loop
+        if (error.message && (error.message.includes('429') || error.message.includes('403') || error.message.includes('400') || error.message.includes('API key') || error.message.includes('quota'))) {
+          throw error;
+        }
         continue;
       }
     }
