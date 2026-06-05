@@ -144,6 +144,80 @@ async function saveBookings(bookings) {
   }
 }
 
+// Helper to send a JSON POST request to a webhook URL
+function postWebhook(url, payload) {
+  return new Promise((resolve) => {
+    try {
+      if (!url) return resolve(false);
+
+      if (typeof fetch === 'function') {
+        fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        })
+        .then(res => {
+          if (!res.ok) {
+            console.warn(`[Webhook] POST to ${url} failed with status: ${res.status}`);
+          } else {
+            console.log(`[Webhook] Sent successfully to ${url}`);
+          }
+          resolve(res.ok);
+        })
+        .catch(err => {
+          console.error(`[Webhook] Error sending to ${url} via fetch:`, err.message);
+          resolve(false);
+        });
+        return;
+      }
+
+      // Fallback using Node.js built-in modules
+      const parsedUrl = new URL(url);
+      const isHttps = parsedUrl.protocol === 'https:';
+      const client = isHttps ? https : http;
+      const bodyString = JSON.stringify(payload);
+
+      const options = {
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port || (isHttps ? 443 : 80),
+        path: parsedUrl.pathname + parsedUrl.search,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(bodyString)
+        }
+      };
+
+      const req = client.request(options, (res) => {
+        let responseBody = '';
+        res.on('data', (chunk) => { responseBody += chunk; });
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            console.log(`[Webhook] Sent successfully to ${url} (fallback)`);
+            resolve(true);
+          } else {
+            console.warn(`[Webhook] POST to ${url} failed with status: ${res.statusCode} (fallback)`);
+            resolve(false);
+          }
+        });
+      });
+
+      req.on('error', (err) => {
+        console.error(`[Webhook] Error sending to ${url} via fallback:`, err.message);
+        resolve(false);
+      });
+
+      req.write(bodyString);
+      req.end();
+    } catch (e) {
+      console.error(`[Webhook] Initialization error for ${url}:`, e.message);
+      resolve(false);
+    }
+  });
+}
+
 // ── Email Notification System ────────────────────────────────────────────────
 
 async function sendBookingEmails(bot, booking, serverBaseUrl) {
@@ -155,10 +229,28 @@ async function sendBookingEmails(bot, booking, serverBaseUrl) {
   const bizName = bot.name || 'Our Business';
   const customerEmail = booking.contact;
 
-  // Build portal URL so owner can view all their leads directly (bookmarkable)
-  const portalUrl = serverBaseUrl
-    ? `${serverBaseUrl}/leads.html?botId=${bot.id}`
-    : null;
+  // Detect form type from booking.notes prefix
+  let leadType = 'appointment';
+  let cleanNotes = booking.notes || '';
+  
+  if (cleanNotes.startsWith('[Support Ticket] ')) {
+    leadType = 'ticket';
+    cleanNotes = cleanNotes.substring('[Support Ticket] '.length);
+  } else if (cleanNotes.startsWith('[Quote Request] ')) {
+    leadType = 'quote';
+    cleanNotes = cleanNotes.substring('[Quote Request] '.length);
+  } else if (cleanNotes.startsWith('[Hotel Booking] ')) {
+    leadType = 'hotel';
+    cleanNotes = cleanNotes.substring('[Hotel Booking] '.length);
+  } else if (cleanNotes.startsWith('[Medical Appointment] ')) {
+    leadType = 'medical';
+    cleanNotes = cleanNotes.substring('[Medical Appointment] '.length);
+  } else if (cleanNotes.startsWith('[E-commerce Order] ')) {
+    leadType = 'order';
+    cleanNotes = cleanNotes.substring('[E-commerce Order] '.length);
+  } else if (cleanNotes.startsWith('[Appointment] ')) {
+    cleanNotes = cleanNotes.substring('[Appointment] '.length);
+  }
 
   // Format date nicely
   let friendlyDate = booking.date;
@@ -168,18 +260,81 @@ async function sendBookingEmails(bot, booking, serverBaseUrl) {
     });
   } catch (e) {}
 
+  // Customize subjects and titles based on leadType
+  let ownerSubject = `New Booking Request: ${booking.name} — ${bizName}`;
+  let ownerTitle = 'New Appointment Request';
+  let ownerIntro = `A visitor just submitted a booking at <strong>${bizName}</strong>`;
+  let notesLabel = 'Notes';
+  let dateFieldLabel = 'Date';
+  let timeFieldLabel = 'Time';
+
+  let customerSubject = `Confirmation: Your booking request at ${bizName}`;
+  let customerTitle = 'Appointment Request Received';
+  let customerBody = `Thank you for scheduling a visit at <strong>${bizName}</strong>. We have received your booking details and will contact you shortly to confirm your appointment.`;
+
+  if (leadType === 'ticket') {
+    ownerSubject = `New Support Ticket: ${booking.name} — ${bizName}`;
+    ownerTitle = '🎫 New Support Ticket';
+    ownerIntro = `A visitor just submitted a support ticket for <strong>${bizName}</strong>`;
+    notesLabel = 'Issue Description';
+    customerSubject = `Support Ticket Logged: #${booking.id.substring(0, 8)} at ${bizName}`;
+    customerTitle = 'Support Ticket Logged';
+    customerBody = `Thank you for reporting your issue to <strong>${bizName}</strong>. We have successfully logged your support ticket (ID: #${booking.id.substring(0, 8)}) and our team will contact you shortly to help resolve it.`;
+  } else if (leadType === 'quote') {
+    ownerSubject = `New Quote Request: ${booking.name} — ${bizName}`;
+    ownerTitle = '📋 New Quote Request';
+    ownerIntro = `A visitor just requested a custom quote from <strong>${bizName}</strong>`;
+    notesLabel = 'Project Details';
+    customerSubject = `Quote Request Received: #${booking.id.substring(0, 8)} at ${bizName}`;
+    customerTitle = 'Quote Request Received';
+    customerBody = `Thank you for requesting a custom quote from <strong>${bizName}</strong>. We have received your project details and our team will get back to you shortly with pricing.`;
+  } else if (leadType === 'hotel') {
+    ownerSubject = `New Hotel Booking Request: ${booking.name} — ${bizName}`;
+    ownerTitle = '🏨 New Stay Reservation';
+    ownerIntro = `A visitor just requested a room booking at <strong>${bizName}</strong>`;
+    notesLabel = 'Stay Details & Guests';
+    dateFieldLabel = 'Check-in Date';
+    timeFieldLabel = 'Arrival Time';
+    customerSubject = `Stay Reservation Request: Your room at ${bizName}`;
+    customerTitle = 'Stay Reservation Request Received';
+    customerBody = `Thank you for requesting a room stay at <strong>${bizName}</strong>. We have received your check-in dates and preferences and will contact you shortly to confirm your stay.`;
+  } else if (leadType === 'medical') {
+    ownerSubject = `New Patient Appointment: ${booking.name} — ${bizName}`;
+    ownerTitle = '🏥 New Patient Appointment';
+    ownerIntro = `A patient just scheduled a doctor appointment at <strong>${bizName}</strong>`;
+    notesLabel = 'Symptoms / Reason';
+    dateFieldLabel = 'Preferred Date';
+    timeFieldLabel = 'Time Slot';
+    customerSubject = `Appointment Request: Your visit at ${bizName}`;
+    customerTitle = 'Appointment Request Received';
+    customerBody = `Thank you for requesting a doctor appointment at <strong>${bizName}</strong>. We have received your details and our team will reach out to finalize your time slot.`;
+  } else if (leadType === 'order') {
+    ownerSubject = `New E-commerce Order: ${booking.name} — ${bizName}`;
+    ownerTitle = '🛍️ New Order Received';
+    ownerIntro = `A customer just placed an order at <strong>${bizName}</strong>`;
+    notesLabel = 'Order Details & Allergies';
+    dateFieldLabel = 'Delivery Date';
+    timeFieldLabel = 'Delivery Time';
+    customerSubject = `Order Confirmed: #${booking.id.substring(0, 8)} from ${bizName}`;
+    customerTitle = 'Order Confirmed';
+    customerBody = `Thank you for placing an order with <strong>${bizName}</strong>. We are preparing your items and will contact you for delivery or dispatch.`;
+  }
+
   // 1. Owner Notification Email (rich, beautiful design with portal link)
-  const ownerSubject = `New Booking Request: ${booking.name} — ${bizName}`;
+  const portalUrl = serverBaseUrl
+    ? `${serverBaseUrl}/leads.html?botId=${bot.id}`
+    : null;
+
   const ownerHtml = `
     <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:620px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
       <div style="background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);padding:28px 32px;">
         <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">LuminaBot — New Lead Alert</div>
-        <h1 style="margin:0;color:white;font-size:22px;font-weight:700;">New Appointment Request</h1>
-        <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:14px;">A visitor just submitted a booking at <strong>${bizName}</strong></p>
+        <h1 style="margin:0;color:white;font-size:22px;font-weight:700;">${ownerTitle}</h1>
+        <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:14px;">${ownerIntro}</p>
       </div>
       <div style="padding:28px 32px;">
         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:24px;">
-          <h2 style="margin:0 0 16px;font-size:15px;color:#1e293b;font-weight:700;">Customer Details</h2>
+          <h2 style="margin:0 0 16px;font-size:15px;color:#1e293b;font-weight:700;">Lead Details</h2>
           <table style="width:100%;border-collapse:collapse;">
             <tr>
               <td style="padding:10px 0;border-bottom:1px solid #e2e8f0;width:38%;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Name</td>
@@ -189,22 +344,29 @@ async function sendBookingEmails(bot, booking, serverBaseUrl) {
               <td style="padding:10px 0;border-bottom:1px solid #e2e8f0;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Contact</td>
               <td style="padding:10px 0;border-bottom:1px solid #e2e8f0;font-size:14px;font-weight:600;color:#6366f1;">${booking.contact}</td>
             </tr>
+            ${booking.time !== 'N/A' ? `
             <tr>
-              <td style="padding:10px 0;border-bottom:1px solid #e2e8f0;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Date</td>
+              <td style="padding:10px 0;border-bottom:1px solid #e2e8f0;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">${dateFieldLabel}</td>
               <td style="padding:10px 0;border-bottom:1px solid #e2e8f0;font-size:14px;font-weight:600;color:#1e293b;">${friendlyDate}</td>
             </tr>
             <tr>
-              <td style="padding:10px 0;border-bottom:${booking.notes ? '1px solid #e2e8f0' : 'none'};font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Time</td>
-              <td style="padding:10px 0;border-bottom:${booking.notes ? '1px solid #e2e8f0' : 'none'};font-size:14px;font-weight:600;color:#1e293b;">${booking.time}</td>
+              <td style="padding:10px 0;border-bottom:${cleanNotes ? '1px solid #e2e8f0' : 'none'};font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">${timeFieldLabel}</td>
+              <td style="padding:10px 0;border-bottom:${cleanNotes ? '1px solid #e2e8f0' : 'none'};font-size:14px;font-weight:600;color:#1e293b;">${booking.time}</td>
             </tr>
-            ${booking.notes ? `<tr>
-              <td style="padding:10px 0;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Notes</td>
-              <td style="padding:10px 0;font-size:14px;color:#475569;font-style:italic;">"${booking.notes}"</td>
+            ` : `
+            <tr>
+              <td style="padding:10px 0;border-bottom:${cleanNotes ? '1px solid #e2e8f0' : 'none'};font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Date Created</td>
+              <td style="padding:10px 0;border-bottom:${cleanNotes ? '1px solid #e2e8f0' : 'none'};font-size:14px;font-weight:600;color:#1e293b;">${friendlyDate}</td>
+            </tr>
+            `}
+            ${cleanNotes ? `<tr>
+              <td style="padding:10px 0;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">${notesLabel}</td>
+              <td style="padding:10px 0;font-size:14px;color:#475569;font-style:italic;">"${cleanNotes}"</td>
             </tr>` : ''}
           </table>
         </div>
         <p style="color:#475569;font-size:14px;margin:0 0 20px;line-height:1.6;">
-          Please contact <strong>${booking.contact}</strong> to confirm this appointment at your earliest convenience.
+          Please contact <strong>${booking.contact}</strong> to process this request at your earliest convenience.
         </p>
         ${portalUrl ? `
         <div style="text-align:center;margin:24px 0;">
@@ -221,18 +383,21 @@ async function sendBookingEmails(bot, booking, serverBaseUrl) {
   `;
 
   // 2. Compile Customer Confirmation
-  const customerSubject = `Confirmation: Your booking request at ${bizName}`;
   const customerHtml = `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-      <h2 style="color: #10b981; margin-top: 0;">Appointment Request Received</h2>
+      <h2 style="color: #10b981; margin-top: 0;">${customerTitle}</h2>
       <p style="color: #475569;">Hi ${booking.name},</p>
-      <p style="color: #475569;">Thank you for scheduling a visit at <strong>${bizName}</strong>. We have received your booking details and will contact you shortly to confirm your appointment.</p>
+      <p style="color: #475569;">${customerBody}</p>
       
       <div style="border: 1px solid #f1f5f9; background: #f8fafc; border-radius: 8px; padding: 16px; margin: 20px 0;">
-        <h3 style="margin-top: 0; font-size: 14px; color: #0f172a;">Requested Time Details</h3>
-        <p style="margin: 4px 0; font-size: 13px; color: #334155;"><strong>Date:</strong> ${booking.date}</p>
-        <p style="margin: 4px 0; font-size: 13px; color: #334155;"><strong>Time:</strong> ${booking.time}</p>
-        ${booking.notes ? `<p style="margin: 4px 0; font-size: 13px; color: #334155;"><strong>Notes:</strong> ${booking.notes}</p>` : ''}
+        <h3 style="margin-top: 0; font-size: 14px; color: #0f172a;">Request Details</h3>
+        ${booking.time !== 'N/A' ? `
+        <p style="margin: 4px 0; font-size: 13px; color: #334155;"><strong>${dateFieldLabel}:</strong> ${booking.date}</p>
+        <p style="margin: 4px 0; font-size: 13px; color: #334155;"><strong>${timeFieldLabel}:</strong> ${booking.time}</p>
+        ` : `
+        <p style="margin: 4px 0; font-size: 13px; color: #334155;"><strong>Date Submitted:</strong> ${booking.date}</p>
+        `}
+        ${cleanNotes ? `<p style="margin: 4px 0; font-size: 13px; color: #334155;"><strong>${notesLabel}:</strong> ${cleanNotes}</p>` : ''}
       </div>
       
       <p style="color: #475569; font-size: 13px;">If you need to change or cancel this request, please reply to this email.</p>
@@ -396,6 +561,8 @@ app.post('/api/bots', asyncHandler(async (req, res) => {
     createdAt: now,
     updatedAt: now,
     bookingMethod: data.bookingMethod || 'builtin',
+    businessType: data.businessType || 'general',
+    webhookUrl: data.webhookUrl || '',
     emailConfig: data.emailConfig || {
       receiverEmail: '',
       resendApiKey: '',
@@ -495,6 +662,49 @@ app.post('/api/bots/:id/bookings', asyncHandler(async (req, res) => {
   // Derive the server's public base URL from the request (used for portal link in email)
   const serverBaseUrl = `${req.protocol}://${req.get('host')}`;
   sendBookingEmails(targetBot, newBooking, serverBaseUrl);
+
+  // Trigger webhook in the background if configured
+  if (targetBot.webhookUrl) {
+    // Determine lead type and clean notes for payload
+    let leadType = 'appointment';
+    let cleanNotes = newBooking.notes || '';
+    if (cleanNotes.startsWith('[Support Ticket] ')) {
+      leadType = 'ticket';
+      cleanNotes = cleanNotes.substring('[Support Ticket] '.length);
+    } else if (cleanNotes.startsWith('[Quote Request] ')) {
+      leadType = 'quote';
+      cleanNotes = cleanNotes.substring('[Quote Request] '.length);
+    } else if (cleanNotes.startsWith('[Hotel Booking] ')) {
+      leadType = 'hotel';
+      cleanNotes = cleanNotes.substring('[Hotel Booking] '.length);
+    } else if (cleanNotes.startsWith('[Medical Appointment] ')) {
+      leadType = 'medical';
+      cleanNotes = cleanNotes.substring('[Medical Appointment] '.length);
+    } else if (cleanNotes.startsWith('[E-commerce Order] ')) {
+      leadType = 'order';
+      cleanNotes = cleanNotes.substring('[E-commerce Order] '.length);
+    } else if (cleanNotes.startsWith('[Appointment] ')) {
+      cleanNotes = cleanNotes.substring('[Appointment] '.length);
+    }
+
+    const webhookPayload = {
+      event: 'lead_captured',
+      bookingId: newBooking.id,
+      botId: newBooking.botId,
+      botName: newBooking.botName,
+      businessType: targetBot.businessType || 'general',
+      leadType: leadType,
+      name: newBooking.name,
+      contact: newBooking.contact,
+      date: newBooking.date,
+      time: newBooking.time,
+      notes: newBooking.notes,
+      cleanNotes: cleanNotes,
+      createdAt: newBooking.createdAt
+    };
+
+    postWebhook(targetBot.webhookUrl, webhookPayload);
+  }
 
   res.status(201).json({ success: true, booking: newBooking });
 }));
@@ -627,6 +837,12 @@ function serverFetch(url, redirectCount = 0) {
     req.end();
   });
 }
+
+// POST /api/test-webhook — Receiver endpoint to test webhooks locally
+app.post('/api/test-webhook', (req, res) => {
+  console.log('📬 [Test Webhook Payload Received]:', JSON.stringify(req.body, null, 2));
+  res.json({ success: true });
+});
 
 // Global error handler middleware
 app.use((err, req, res, next) => {

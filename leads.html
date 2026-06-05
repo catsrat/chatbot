@@ -464,6 +464,30 @@
       emptyState.style.display = 'none';
       filtered.forEach(lead => {
         const isNew = highlightNew && !knownIds.has(lead.id);
+        const notesVal = lead.notes || '';
+        let badgeHTML = '';
+        let rawText = notesVal;
+
+        if (notesVal.startsWith('[Support Ticket] ')) {
+          badgeHTML = `<span style="display:inline-flex; align-items:center; gap:3px; background:#fee2e2; color:#ef4444; border:1px solid #fca5a5; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700; font-family:'Outfit',sans-serif; text-transform:uppercase; margin-right:6px; line-height:1; vertical-align:middle;">🎫 Support Ticket</span>`;
+          rawText = notesVal.substring('[Support Ticket] '.length);
+        } else if (notesVal.startsWith('[Quote Request] ')) {
+          badgeHTML = `<span style="display:inline-flex; align-items:center; gap:3px; background:#fef3c7; color:#d97706; border:1px solid #fcd34d; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700; font-family:'Outfit',sans-serif; text-transform:uppercase; margin-right:6px; line-height:1; vertical-align:middle;">📋 Quote Request</span>`;
+          rawText = notesVal.substring('[Quote Request] '.length);
+        } else if (notesVal.startsWith('[Hotel Booking] ')) {
+          badgeHTML = `<span style="display:inline-flex; align-items:center; gap:3px; background:#dbeafe; color:#2563eb; border:1px solid #bfdbfe; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700; font-family:'Outfit',sans-serif; text-transform:uppercase; margin-right:6px; line-height:1; vertical-align:middle;">🏨 Hotel Booking</span>`;
+          rawText = notesVal.substring('[Hotel Booking] '.length);
+        } else if (notesVal.startsWith('[Medical Appointment] ')) {
+          badgeHTML = `<span style="display:inline-flex; align-items:center; gap:3px; background:#e0f2fe; color:#0284c7; border:1px solid #bae6fd; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700; font-family:'Outfit',sans-serif; text-transform:uppercase; margin-right:6px; line-height:1; vertical-align:middle;">🏥 Appointment</span>`;
+          rawText = notesVal.substring('[Medical Appointment] '.length);
+        } else if (notesVal.startsWith('[E-commerce Order] ')) {
+          badgeHTML = `<span style="display:inline-flex; align-items:center; gap:3px; background:#f3e8ff; color:#9333ea; border:1px solid #e9d5ff; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700; font-family:'Outfit',sans-serif; text-transform:uppercase; margin-right:6px; line-height:1; vertical-align:middle;">🛍️ Order</span>`;
+          rawText = notesVal.substring('[E-commerce Order] '.length);
+        } else if (notesVal.startsWith('[Appointment] ')) {
+          badgeHTML = `<span style="display:inline-flex; align-items:center; gap:3px; background:#e0e7ff; color:#4f46e5; border:1px solid #c7d2fe; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700; font-family:'Outfit',sans-serif; text-transform:uppercase; margin-right:6px; line-height:1; vertical-align:middle;">📅 Appointment</span>`;
+          rawText = notesVal.substring('[Appointment] '.length);
+        }
+
         const tr = document.createElement('tr');
         if (isNew) tr.classList.add('new-row');
         tr.innerHTML = `
@@ -476,7 +500,9 @@
             <span class="date-badge" style="background: ${botThemeColor}18; color: var(--accent-color);">${escapeHTML(lead.date)}</span>
             <span class="time-badge">${escapeHTML(lead.time)}</span>
           </td>
-          <td style="padding: 16px 20px; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(lead.notes)}">${escapeHTML(lead.notes) || '<span style="color:var(--text-muted); font-style:italic;">None</span>'}</td>
+          <td style="padding: 16px 20px; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(rawText)}">
+            ${badgeHTML}${escapeHTML(rawText) || '<span style="color:var(--text-muted); font-style:italic;">None</span>'}
+          </td>
           <td style="padding: 16px 20px; text-align: center;">
             <button class="action-btn" onclick="deleteLead('${lead.id}')">Delete</button>
           </td>

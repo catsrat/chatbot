@@ -79,6 +79,22 @@
         </div>
 
         <div class="form-group">
+          <label for="businessType">Business Category / Persona</label>
+          <select id="businessType">
+            <option value="general" selected>🏢 Corporate / General Business</option>
+            <option value="banking">🏦 Banking & Financial Services</option>
+            <option value="hospital">🏥 Hospital & Healthcare</option>
+            <option value="hotel">🏨 Hotel & Hospitality</option>
+            <option value="restaurant">🍔 Restaurant & Food</option>
+            <option value="realestate">🏠 Real Estate & Agency</option>
+            <option value="trades">🔧 Service Trades (Plumber/Electrician)</option>
+            <option value="retail">🛍️ E-commerce & Retail Shop</option>
+            <option value="support">💻 Tech Support / SaaS Helpdesk</option>
+            <option value="portfolio">🧑‍💻 Personal Portfolio / Resume</option>
+          </select>
+        </div>
+
+        <div class="form-group">
           <label>Theme Brand Color</label>
           <div class="color-picker-container">
             <input type="color" id="themeColor" class="custom-color-input" value="#0ea5e9">
@@ -164,9 +180,9 @@
         </div>
       </section>
 
-      <!-- Card 3: Email Notifications -->
+      <!-- Card 3: Email & Webhook Integrations -->
       <section class="config-card">
-        <h3 class="card-title">3. Email Notifications</h3>
+        <h3 class="card-title">3. Email & Webhook Integrations</h3>
         
         <div class="form-group">
           <label for="receiverEmail">Owner Notification Email</label>
@@ -189,6 +205,14 @@
           <input type="text" id="senderEmail" value="onboarding@resend.dev" placeholder="e.g. notifications@yourdomain.com">
           <span style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
             Must be verified in your Resend account.
+          </span>
+        </div>
+
+        <div class="form-group">
+          <label for="webhookUrl">Webhook Integration URL (Optional)</label>
+          <input type="text" id="webhookUrl" placeholder="https://api.example.com/webhooks/leads">
+          <span style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+            POSTs lead/booking JSON payload (supports ServiceNow, Zapier, Make).
           </span>
         </div>
       </section>
@@ -378,10 +402,10 @@
   </div>
 
   <!-- Injected Chatbot Script -->
-  <script src="widget.js?v=16" id="widget-script" data-api-key="DEMO" data-bot-name="Smile Assistant" data-theme-color="#0ea5e9" data-welcome-msg="Hi! Welcome to Smile Dental Clinic. How can I help you book or learn about our dental cleaning rates today?" data-system-prompt="You are Smile Dental Clinic's friendly receptionist. Your goal is to guide visitors to book a checkup. Cleaning costs €79. Whitening is €199. Calendly booking link: https://calendly.com/mock-dentist"></script>
+  <script src="widget.js?v=17" id="widget-script" data-api-key="DEMO" data-bot-name="Smile Assistant" data-theme-color="#0ea5e9" data-welcome-msg="Hi! Welcome to Smile Dental Clinic. How can I help you book or learn about our dental cleaning rates today?" data-system-prompt="You are Smile Dental Clinic's friendly receptionist. Your goal is to guide visitors to book a checkup. Cleaning costs €79. Whitening is €199. Calendly booking link: https://calendly.com/mock-dentist"></script>
 
   <!-- Builder Logic Script -->
-  <script src="index.js?v=16"></script>
+  <script src="index.js?v=17"></script>
 
   <!-- My Bots Dashboard Modal -->
   <div id="myBotsModal" style="display:none; position:fixed; inset:0; z-index:100000; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); align-items:center; justify-content:center;">
