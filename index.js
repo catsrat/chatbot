@@ -541,42 +541,61 @@ ${categoryInstructions}
     return await response.arrayBuffer();
   }
 
-  async function discoverSitemapLinks(baseUrl) {
+  async function discoverSitemapLinks(baseUrl, depth = 0) {
+    if (depth > 2) return []; // Limit depth to prevent runaway recursion
     try {
       const urlObj = new URL(baseUrl);
-      const sitemapUrl = `${urlObj.origin}/sitemap.xml`;
+      let sitemapUrl = baseUrl;
+      if (depth === 0) {
+        sitemapUrl = `${urlObj.origin}/sitemap.xml`;
+      }
       console.log(`Attempting to discover sitemap at: ${sitemapUrl}`);
       
       const xmlText = await fetchPageHTML(sitemapUrl);
-      if (!xmlText || xmlText.trim().length < 20 || (!xmlText.includes('<url>') && !xmlText.includes('<sitemap>'))) {
-        console.log('No valid sitemap content found.');
+      if (!xmlText || xmlText.trim().length < 20) {
+        console.log(`No valid sitemap content at: ${sitemapUrl}`);
         return [];
       }
       
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+      const isSitemapIndex = xmlText.includes('<sitemap>') || xmlText.includes('sitemapindex');
       
-      // Check if it is a sitemap index
-      const sitemaps = xmlDoc.getElementsByTagName('sitemap');
-      if (sitemaps.length > 0) {
-        console.log(`Sitemap index detected with ${sitemaps.length} sub-sitemaps.`);
+      if (isSitemapIndex) {
+        const sitemapRegex = /<sitemap>[\s\S]*?<loc>([^<]+)<\/loc>[\s\S]*?<\/sitemap>/g;
+        const matches = [...xmlText.matchAll(sitemapRegex)];
+        console.log(`Sitemap index detected with ${matches.length} sub-sitemaps at: ${sitemapUrl}`);
+        
         const subLinks = [];
-        for (let i = 0; i < Math.min(sitemaps.length, 2); i++) {
-          const locEl = sitemaps[i].getElementsByTagName('loc')[0];
-          if (locEl) {
-            const subLinksBatch = await discoverSitemapLinks(locEl.textContent.trim());
-            subLinks.push(...subLinksBatch);
-          }
+        
+        // Prioritize sitemaps containing 'pages', 'collections', 'products', 'blogs'
+        const sortedSubSitemaps = matches.map(m => m[1].trim()).sort((a, b) => {
+          const score = (url) => {
+            const low = url.toLowerCase();
+            if (low.includes('pages')) return 4;
+            if (low.includes('collections')) return 3;
+            if (low.includes('products')) return 2;
+            if (low.includes('blogs')) return 1;
+            return 0;
+          };
+          return score(b) - score(a);
+        });
+
+        // Limit to top 5 sub-sitemaps to avoid excessive queries
+        const targetSitemaps = sortedSubSitemaps.slice(0, 5);
+        for (const subSitemap of targetSitemaps) {
+          const subLinksBatch = await discoverSitemapLinks(subSitemap, depth + 1);
+          subLinks.push(...subLinksBatch);
+          if (subLinks.length > 500) break; // Hard limit on gathered links
         }
-        return subLinks;
+        return subLinks.slice(0, 500);
       }
       
-      const locElements = xmlDoc.getElementsByTagName('loc');
+      const urlRegex = /<loc>([^<]+)<\/loc>/g;
+      const matches = [...xmlText.matchAll(urlRegex)];
       const links = [];
       
-      for (let i = 0; i < locElements.length; i++) {
+      for (let i = 0; i < matches.length; i++) {
         try {
-          const loc = locElements[i].textContent.trim();
+          const loc = matches[i][1].trim();
           const locObj = new URL(loc);
           if (locObj.host === urlObj.host) {
             links.push(locObj.origin + locObj.pathname);
@@ -584,10 +603,10 @@ ${categoryInstructions}
         } catch (e) {}
       }
       
-      console.log(`Discovered ${links.length} links from sitemap`);
-      return links;
+      console.log(`Discovered ${links.length} links from sitemap: ${sitemapUrl}`);
+      return links.slice(0, 500);
     } catch (err) {
-      console.warn('Sitemap discovery failed:', err);
+      console.warn(`Sitemap discovery failed for ${baseUrl}:`, err);
       return [];
     }
   }

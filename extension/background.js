@@ -91,7 +91,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'FETCH_URL') {
     (async () => {
       try {
-        if (message.url.toLowerCase().endsWith('.pdf')) {
+        const urlLower = message.url.toLowerCase();
+        const isXml = urlLower.endsWith('.xml') || urlLower.includes('sitemap') || urlLower.includes('.xml?');
+
+        if (urlLower.endsWith('.pdf')) {
           console.log(`Extension background script fetching PDF binary: ${message.url}`);
           const res = await fetch(message.url);
           if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
@@ -105,13 +108,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
           const base64 = btoa(binaryString);
           sendResponse({ pdfBase64: base64 });
+        } else if (isXml) {
+          console.log(`Extension background script fetching XML directly: ${message.url}`);
+          const res = await fetch(message.url);
+          if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
+          const html = await res.text();
+          sendResponse({ html });
         } else {
           // Try background tab rendering first for client-side JS / Wix support
           const html = await fetchRenderedHTML(message.url);
           sendResponse({ html });
         }
       } catch (err) {
-        console.warn(`Headless background render failed, falling back to static fetch:`, err);
+        console.warn(`Headless background render/fetch failed, falling back to static fetch:`, err);
         try {
           const res = await fetch(message.url);
           if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
