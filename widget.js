@@ -766,32 +766,49 @@
       }
     }
 
-    // If it's a bot message, config method is builtin, and text contains '#book-form', render the inline booking form card!
-    if (role === 'model' && text.includes('#book-form')) {
-      const bookingContainer = document.createElement('div');
-      bookingContainer.style.marginTop = '8px';
-      bookingContainer.style.width = '100%';
-      bookingContainer.style.maxWidth = '290px';
-      bookingContainer.style.alignSelf = 'flex-start';
-      
-      let prefilledNotes = '';
-      const queryMatch = text.match(/#book-form\?([^)\s"'>]+)/);
-      if (queryMatch) {
-        try {
-          const params = new URLSearchParams(queryMatch[1]);
-          if (params.has('items')) {
-            prefilledNotes = decodeURIComponent(params.get('items'));
-          } else if (params.has('notes')) {
-            prefilledNotes = decodeURIComponent(params.get('notes'));
-          }
-        } catch (e) {
-          console.warn('Failed to parse book-form query params:', e);
-        }
-      }
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
 
-      const lowerText = text.toLowerCase();
-      let formType = 'appointment';
-      
+  function displayInlineForm(linkHref, linkText = 'Book') {
+    const bookingContainer = document.createElement('div');
+    bookingContainer.style.marginTop = '8px';
+    bookingContainer.style.width = '100%';
+    bookingContainer.style.maxWidth = '290px';
+    bookingContainer.style.alignSelf = 'flex-start';
+    
+    let prefilledNotes = '';
+    const queryMatch = linkHref.match(/#book-form\?([^)\s"'>]+)/);
+    if (queryMatch) {
+      try {
+        const params = new URLSearchParams(queryMatch[1]);
+        if (params.has('items')) {
+          prefilledNotes = decodeURIComponent(params.get('items'));
+        } else if (params.has('notes')) {
+          prefilledNotes = decodeURIComponent(params.get('notes'));
+        }
+      } catch (e) {
+        console.warn('Failed to parse book-form query params:', e);
+      }
+    }
+
+    const lowerText = linkText.toLowerCase() + ' ' + linkHref.toLowerCase();
+    
+    // Classify formType based on businessType first
+    const bizType = config.businessType || 'general';
+    let formType = 'appointment';
+    
+    if (bizType === 'restaurant') {
+      formType = 'appointment'; // Restaurant table reservation
+    } else if (bizType === 'retail') {
+      formType = 'order'; // E-commerce order
+    } else if (bizType === 'support') {
+      formType = 'ticket'; // Tech support ticket
+    } else if (bizType === 'hospital') {
+      formType = 'medical'; // Clinic appointment
+    } else if (bizType === 'hotel') {
+      formType = 'hotel'; // Hotel stay reservation
+    } else {
+      // Fallback to keyword matching based on link text/href
       if (lowerText.includes('ticket') || lowerText.includes('support') || lowerText.includes('complaint') || lowerText.includes('dispute') || lowerText.includes('fraud') || lowerText.includes('lost') || lowerText.includes('stolen') || lowerText.includes('error')) {
         formType = 'ticket';
       } else if (lowerText.includes('quote') || lowerText.includes('estimate') || lowerText.includes('pricing') || lowerText.includes('calculator') || lowerText.includes('rates')) {
@@ -800,232 +817,226 @@
         formType = 'hotel';
       } else if (lowerText.includes('doctor') || lowerText.includes('hospital') || lowerText.includes('clinic') || lowerText.includes('patient') || lowerText.includes('medical')) {
         formType = 'medical';
-      } else if (lowerText.includes('order') || lowerText.includes('buy') || lowerText.includes('purchase') || lowerText.includes('checkout') || lowerText.includes('shop') || lowerText.includes('food')) {
+      } else if (lowerText.includes('order') || lowerText.includes('buy') || lowerText.includes('purchase') || lowerText.includes('checkout') || lowerText.includes('shop') || (/\bfood\b/).test(lowerText)) {
         formType = 'order';
       }
-
-      let formTitle = '📅 Request Appointment';
-      let dateLabel = 'Date';
-      let timeLabel = 'Time';
-      let notesLabel = 'Notes (Optional)';
-      let notesPlaceholder = 'Reason for visit / special requests';
-      let submitLabel = 'Confirm Reservation';
-      let hideDateTime = false;
-      
-      if (formType === 'ticket') {
-        formTitle = '🎫 Submit Support Ticket';
-        notesLabel = 'Describe the Issue';
-        notesPlaceholder = 'Please describe the problem you are experiencing...';
-        submitLabel = 'Submit Support Ticket';
-        hideDateTime = true;
-      } else if (formType === 'quote') {
-        formTitle = '📋 Request a Quote';
-        notesLabel = 'Quote / Project Details';
-        notesPlaceholder = 'Describe what you need pricing/estimates for...';
-        submitLabel = 'Submit Quote Request';
-        hideDateTime = true;
-      } else if (formType === 'hotel') {
-        formTitle = '🏨 Book Room & Stay';
-        dateLabel = 'Check-in Date';
-        timeLabel = 'Arrival Time';
-        notesLabel = 'Room Type & Guest Details';
-        notesPlaceholder = 'e.g. 2 adults, double bed, ocean view';
-        submitLabel = 'Submit Reservation';
-      } else if (formType === 'medical') {
-        formTitle = '🏥 Book Doctor Appointment';
-        dateLabel = 'Preferred Date';
-        timeLabel = 'Preferred Time Slot';
-        notesLabel = 'Reason for Visit / Symptoms';
-        notesPlaceholder = 'e.g. routine checkup, sore throat, dental pain';
-        submitLabel = 'Request Appointment';
-      } else if (formType === 'order') {
-        formTitle = '🛍️ Place Order';
-        dateLabel = 'Preferred Delivery Date';
-        timeLabel = 'Preferred Delivery Time';
-        notesLabel = 'Order Details & Customizations';
-        notesPlaceholder = 'e.g. double cheese, allergies, delivery instructions';
-        submitLabel = 'Confirm Order';
-      }
-
-      const formId = 'form-' + Math.random().toString(36).substring(2, 7);
-      bookingContainer.innerHTML = `
-        <div class="luminabot-booking-card" id="${formId}">
-          <h4>${formTitle}</h4>
-          
-          <div class="luminabot-booking-field">
-            <label>Name</label>
-            <input type="text" class="booking-name" placeholder="Your Full Name" required />
-          </div>
-          
-          <div class="luminabot-booking-field">
-            <label>Contact Info</label>
-            <input type="text" class="booking-contact" placeholder="Email or Phone" required />
-          </div>
-          
-          <div class="luminabot-booking-row" style="${hideDateTime ? 'display: none;' : ''}">
-            <div class="luminabot-booking-field">
-              <label>${dateLabel}</label>
-              <input type="date" class="booking-date" required />
-            </div>
-            <div class="luminabot-booking-field">
-              <label>${timeLabel}</label>
-              <input type="time" class="booking-time" required />
-            </div>
-          </div>
-          
-          <div class="luminabot-booking-field">
-            <label>${notesLabel}</label>
-            <textarea class="booking-notes" placeholder="${notesPlaceholder}" rows="2">${prefilledNotes.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</textarea>
-          </div>
-          
-          <button class="luminabot-booking-submit">${submitLabel}</button>
-        </div>
-      `;
-      
-      messagesContainer.appendChild(bookingContainer);
-      
-      // Set default date to today
-      const dateInput = bookingContainer.querySelector('.booking-date');
-      const timeInput = bookingContainer.querySelector('.booking-time');
-      const today = new Date().toISOString().split('T')[0];
-      const curTime = new Date().toTimeString().substring(0, 5);
-      
-      if (dateInput) {
-        dateInput.value = today;
-        dateInput.min = today;
-      }
-      if (timeInput) {
-        timeInput.value = curTime;
-      }
-      
-      // Handle submit
-      const submitBtn = bookingContainer.querySelector('.luminabot-booking-submit');
-      submitBtn.addEventListener('click', async () => {
-        const nameVal = bookingContainer.querySelector('.booking-name').value.trim();
-        const contactVal = bookingContainer.querySelector('.booking-contact').value.trim();
-        const dateVal = bookingContainer.querySelector('.booking-date').value;
-        const timeVal = bookingContainer.querySelector('.booking-time').value;
-        const notesVal = bookingContainer.querySelector('.booking-notes').value.trim();
-        
-        if (!nameVal || !contactVal || (!hideDateTime && (!dateVal || !timeVal))) {
-          alert('Please fill out all required fields.');
-          return;
-        }
-        
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Submitting...';
-        
-        try {
-          const finalDate = hideDateTime ? today : dateVal;
-          const finalTime = hideDateTime ? 'N/A' : timeVal;
-          
-          let notesTag = '[Appointment] ';
-          if (formType === 'ticket') notesTag = '[Support Ticket] ';
-          else if (formType === 'quote') notesTag = '[Quote Request] ';
-          else if (formType === 'hotel') notesTag = '[Hotel Booking] ';
-          else if (formType === 'medical') notesTag = '[Medical Appointment] ';
-          else if (formType === 'order') notesTag = '[E-commerce Order] ';
-
-          const bookingData = {
-            name: nameVal,
-            contact: contactVal,
-            date: finalDate,
-            time: finalTime,
-            notes: notesTag + notesVal
-          };
-          
-          const apiBase = getApiBase();
-          let success = false;
-          let savedBooking = null;
-          
-          // Resolve which botId to use: widget attribute, OR builder's active bot override
-          const effectiveBotId = botId || activeBotIdOverride;
-          
-          if (effectiveBotId) {
-            // Always submit to server when we have a bot ID (even in DEMO key mode)
-            const response = await fetch(`${apiBase}/api/bots/${effectiveBotId}/bookings`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(bookingData)
-            });
-            if (response.ok) {
-              const resData = await response.json();
-              success = true;
-              savedBooking = resData.booking;
-            } else {
-              throw new Error('Failed to submit booking to server');
-            }
-          } else {
-            // DEMO mode: save to localStorage
-            const mockId = 'booking-' + Math.random().toString(36).substring(2, 7) + Date.now().toString(36);
-            savedBooking = {
-              id: mockId,
-              botId: botId || 'DEMO',
-              botName: config.botName,
-              ...bookingData,
-              createdAt: new Date().toISOString()
-            };
-            
-            const demoList = JSON.parse(localStorage.getItem('luminabot_demo_bookings') || '[]');
-            demoList.unshift(savedBooking);
-            localStorage.setItem('luminabot_demo_bookings', JSON.stringify(demoList));
-            success = true;
-            
-            await new Promise(r => setTimeout(r, 600));
-          }
-          
-          if (success) {
-            const formCard = document.getElementById(formId);
-            let successText = 'Booking Request Sent!';
-            if (formType === 'ticket') successText = 'Support Ticket Submitted!';
-            else if (formType === 'quote') successText = 'Quote Request Sent!';
-            else if (formType === 'hotel') successText = 'Reservation Submitted!';
-            else if (formType === 'medical') successText = 'Appointment Request Sent!';
-            else if (formType === 'order') successText = 'Order Placed Successfully!';
-
-            formCard.innerHTML = `
-              <div class="luminabot-booking-success">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-                ${successText}
-              </div>
-            `;
-            
-            setTimeout(() => {
-              let botMsg = '';
-              if (formType === 'ticket') {
-                botMsg = `🎉 Perfect! I've logged your support ticket. Our team will look into it immediately and reach out to you at ${bookingData.contact}.`;
-              } else if (formType === 'quote') {
-                botMsg = `🎉 Perfect! I've received your request for a quote. Our sales team will get back to you at ${bookingData.contact} with pricing details.`;
-              } else if (formType === 'hotel') {
-                botMsg = `🎉 Perfect! I've submitted your room reservation request for check-in on ${bookingData.date} at ${bookingData.time}. We will contact you at ${bookingData.contact} to confirm your stay!`;
-              } else if (formType === 'medical') {
-                botMsg = `🎉 Perfect! I've requested your doctor appointment for ${bookingData.date} during the ${bookingData.time} slot. Someone from the clinic will contact you at ${bookingData.contact} to confirm.`;
-              } else if (formType === 'order') {
-                botMsg = `🎉 Perfect! Your order has been placed for delivery on ${bookingData.date} around ${bookingData.time}. We will contact you at ${bookingData.contact} if we need anything else.`;
-              } else {
-                botMsg = `🎉 Perfect! I've received your booking request for ${bookingData.date} at ${bookingData.time}. Someone will contact you at ${bookingData.contact} to confirm.`;
-              }
-              addMessage(botMsg, 'model');
-              
-              // Post message back to parent window
-              window.parent.postMessage({
-                type: 'LUMINABOT_LEAD_SUBMITTED',
-                booking: savedBooking
-              }, '*');
-            }, 500);
-          }
-        } catch (err) {
-          console.error(err);
-          alert('Submission failed. Please try again.');
-          submitBtn.disabled = false;
-          submitBtn.textContent = submitLabel;
-        }
-      });
     }
 
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    let formTitle = '📅 Request Appointment';
+    let dateLabel = 'Date';
+    let timeLabel = 'Time';
+    let notesLabel = 'Notes (Optional)';
+    let notesPlaceholder = 'Reason for visit / special requests';
+    let submitLabel = 'Confirm Reservation';
+    let hideDateTime = false;
+    
+    if (formType === 'ticket') {
+      formTitle = '🎫 Submit Support Ticket';
+      notesLabel = 'Describe the Issue';
+      notesPlaceholder = 'Please describe the problem you are experiencing...';
+      submitLabel = 'Submit Support Ticket';
+      hideDateTime = true;
+    } else if (formType === 'quote') {
+      formTitle = '📋 Request a Quote';
+      notesLabel = 'Quote / Project Details';
+      notesPlaceholder = 'Describe what you need pricing/estimates for...';
+      submitLabel = 'Submit Quote Request';
+      hideDateTime = true;
+    } else if (formType === 'hotel') {
+      formTitle = '🏨 Book Room & Stay';
+      dateLabel = 'Check-in Date';
+      timeLabel = 'Arrival Time';
+      notesLabel = 'Room Type & Guest Details';
+      notesPlaceholder = 'e.g. 2 adults, double bed, ocean view';
+      submitLabel = 'Submit Reservation';
+    } else if (formType === 'medical') {
+      formTitle = '🏥 Book Doctor Appointment';
+      dateLabel = 'Preferred Date';
+      timeLabel = 'Preferred Time Slot';
+      notesLabel = 'Reason for Visit / Symptoms';
+      notesPlaceholder = 'e.g. routine checkup, sore throat, dental pain';
+      submitLabel = 'Request Appointment';
+    } else if (formType === 'order') {
+      formTitle = '🛍️ Place Order';
+      dateLabel = 'Preferred Delivery Date';
+      timeLabel = 'Preferred Delivery Time';
+      notesLabel = 'Order Details & Customizations';
+      notesPlaceholder = 'e.g. double cheese, allergies, delivery instructions';
+      submitLabel = 'Confirm Order';
+    } else if (bizType === 'restaurant') {
+      // Custom labels for restaurant table booking
+      formTitle = '🍽️ Book a Table';
+      dateLabel = 'Preferred Date';
+      timeLabel = 'Preferred Time';
+      notesLabel = 'Dietary Preferences & Special Notes';
+      notesPlaceholder = 'e.g. window seat, food allergies, birthday celebration';
+      submitLabel = 'Book Table';
+    }
+
+    const formId = 'form-' + Math.random().toString(36).substring(2, 7);
+    bookingContainer.innerHTML = `
+      <div class="luminabot-booking-card" id="${formId}">
+        <h4>${formTitle}</h4>
+        
+        <div class="luminabot-booking-field">
+          <label>Name</label>
+          <input type="text" class="booking-name" placeholder="Your Full Name" required />
+        </div>
+        
+        <div class="luminabot-booking-field">
+          <label>Contact Info</label>
+          <input type="text" class="booking-contact" placeholder="Email or Phone" required />
+        </div>
+        
+        <div class="luminabot-booking-row" style="${hideDateTime ? 'display: none;' : ''}">
+          <div class="luminabot-booking-field">
+            <label>${dateLabel}</label>
+            <input type="date" class="booking-date" required />
+          </div>
+          
+          <div class="luminabot-booking-field">
+            <label>${timeLabel}</label>
+            <input type="time" class="booking-time" required />
+          </div>
+        </div>
+        
+        <div class="luminabot-booking-field">
+          <label>${notesLabel}</label>
+          <textarea class="booking-notes" placeholder="${notesPlaceholder}">${prefilledNotes}</textarea>
+        </div>
+        
+        <button class="luminabot-booking-submit" type="button">
+          ${submitLabel}
+        </button>
+      </div>
+    `;
+
+    // Add today's date as default to date inputs
+    const today = new Date().toISOString().split('T')[0];
+    const dateInput = bookingContainer.querySelector('.booking-date');
+    if (dateInput) dateInput.value = today;
+
+    // Add time default (current time formatted)
+    const timeInput = bookingContainer.querySelector('.booking-time');
+    if (timeInput) {
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const mins = String(now.getMinutes()).padStart(2, '0');
+      timeInput.value = `${hours}:${mins}`;
+    }
+
+    const submitBtn = bookingContainer.querySelector('.luminabot-booking-submit');
+    submitBtn.addEventListener('click', async () => {
+      const nameInput = bookingContainer.querySelector('.booking-name');
+      const contactInput = bookingContainer.querySelector('.booking-contact');
+      const dateVal = dateInput ? dateInput.value : '';
+      const timeVal = timeInput ? timeInput.value : '';
+      const notesVal = bookingContainer.querySelector('.booking-notes').value.trim();
+
+      if (!nameInput.value.trim() || !contactInput.value.trim()) {
+        alert('Please fill in Name and Contact Info.');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting...';
+
+      // Attach note prefix prefix based on formType
+      let finalNotes = notesVal;
+      if (formType === 'ticket') {
+        finalNotes = `[Support Ticket] ${notesVal}`;
+      } else if (formType === 'quote') {
+        finalNotes = `[Quote Request] ${notesVal}`;
+      } else if (formType === 'hotel') {
+        finalNotes = `[Hotel Booking] ${notesVal}`;
+      } else if (formType === 'medical') {
+        finalNotes = `[Medical Appointment] ${notesVal}`;
+      } else if (formType === 'order') {
+        finalNotes = `[E-commerce Order] ${notesVal}`;
+      } else if (bizType === 'restaurant') {
+        finalNotes = `[Appointment] Table Booking: ${notesVal}`;
+      }
+
+      const bookingData = {
+        name: nameInput.value.trim(),
+        contact: contactInput.value.trim(),
+        date: dateVal || new Date().toISOString().split('T')[0],
+        time: timeVal || '12:00',
+        notes: finalNotes
+      };
+
+      try {
+        const apiBase = getApiBase();
+        const activeBotId = activeBotIdOverride || botId || 'DEMO';
+        
+        let savedBooking;
+        if (activeBotId !== 'DEMO') {
+          const res = await fetch(`${apiBase}/api/bots/${activeBotId}/bookings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bookingData)
+          });
+          if (!res.ok) throw new Error('Failed to submit booking');
+          const data = await res.json();
+          savedBooking = data.booking;
+        } else {
+          // Simulated submission
+          savedBooking = {
+            id: 'booking-sim-' + Math.random().toString(36).substring(2, 7),
+            botId: 'DEMO',
+            ...bookingData,
+            createdAt: new Date().toISOString()
+          };
+        }
+
+        const card = bookingContainer.querySelector('.luminabot-booking-card');
+        if (card) {
+          card.innerHTML = `
+            <div class="luminabot-booking-success">
+              <svg viewBox="0 0 24 24">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+              <span>Booking Confirmed!</span>
+            </div>
+          `;
+          
+          setTimeout(() => {
+            let botMsg = '';
+            if (formType === 'ticket') {
+              botMsg = `🎉 Perfect! Your support ticket has been created. Incident ID: #${savedBooking.id || 'INC-9912'}. We will get back to you shortly.`;
+            } else if (formType === 'quote') {
+              botMsg = `🎉 Perfect! Your quote request has been received. We will send you an estimate at ${bookingData.contact} soon.`;
+            } else if (formType === 'order') {
+              botMsg = `🎉 Perfect! Your order has been placed for delivery on ${bookingData.date} around ${bookingData.time}. We will contact you at ${bookingData.contact} if we need anything else.`;
+            } else {
+              botMsg = `🎉 Perfect! I've received your booking request for ${bookingData.date} at ${bookingData.time}. Someone will contact you at ${bookingData.contact} to confirm.`;
+            }
+            addMessage(botMsg, 'model');
+            
+            // Show chips again
+            const chipsContainer = document.getElementById('luminabotChipsContainer');
+            if (chipsContainer) chipsContainer.style.display = 'flex';
+            
+            // Post message back to parent window
+            window.parent.postMessage({
+              type: 'LUMINABOT_LEAD_SUBMITTED',
+              booking: savedBooking
+            }, '*');
+          }, 500);
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Submission failed. Please try again.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = submitLabel;
+      }
+    });
+
+    messagesContainer.appendChild(bookingContainer);
+    setTimeout(() => {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }, 50);
   }
 
   // Toggle Chat
@@ -1381,6 +1392,13 @@
                                            .replace(/<a[^>]*href="#keep"[^>]*>.*?<\/a>/gi, 'Keep chatting');
       }
       addMessage("Okay! Let me know if you have any other questions.", 'model');
+    } else if (href && href.startsWith('#book-form')) {
+      e.preventDefault();
+      // Hide suggestion chips while form is open
+      const chipsContainer = document.getElementById('luminabotChipsContainer');
+      if (chipsContainer) chipsContainer.style.display = 'none';
+      
+      displayInlineForm(href, target.textContent);
     }
   });
 
