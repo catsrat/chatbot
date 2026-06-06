@@ -1317,8 +1317,18 @@ app.post('/api/voice/outbound-alert-confirm', asyncHandler(async (req, res) => {
   }
 }));
 
-// Generate ElevenLabs Text-to-Speech audio and write to disk, using MD5 cache
-async function generateElevenLabsTTS(text, bot) {
+// GET /api/voice/tts — Proxy and stream ElevenLabs TTS dynamic audio (highly serverless-compatible)
+app.get('/api/voice/tts', asyncHandler(async (req, res) => {
+  const text = req.query.text || '';
+  const botId = req.query.botId || '';
+  
+  if (!text) {
+    return res.status(400).send("Text is required");
+  }
+
+  const bots = await loadBots();
+  const bot = bots[botId] || {};
+
   const apiKey = (bot.elevenLabsApiKey && bot.elevenLabsApiKey.trim())
     ? bot.elevenLabsApiKey.trim()
     : 'sk_7745c909b8cc85e87df61d1f06f8091ca5c330de27e374e7';
@@ -1327,13 +1337,25 @@ async function generateElevenLabsTTS(text, bot) {
     ? bot.elevenLabsVoiceId.trim()
     : 'XrExE9yKIg1WjnnlVkGX'; // Matilda default
 
+  // Use MD5 hash of text + voice ID to check if cached file exists
   const textHash = crypto.createHash('md5').update(text + '_' + voiceId).digest('hex');
   const filename = `tts_${textHash}.mp3`;
-  const filePath = path.join(__dirname, '..', 'temp_audio', filename);
+  
+  // Decide cache folder: /tmp if write to project root fails (Vercel) or local temp_audio
+  let cacheDir = path.join(__dirname, '..', 'temp_audio');
+  try {
+    fs.accessSync(cacheDir, fs.constants.W_OK);
+  } catch (e) {
+    cacheDir = '/tmp';
+  }
+  
+  const filePath = path.join(cacheDir, filename);
 
-  // Return early if file already exists in cache
+  res.setHeader('Content-Type', 'audio/mpeg');
+  res.setHeader('Cache-Control', 'public, max-age=86400'); // CDN caching
+
   if (fs.existsSync(filePath)) {
-    return `/temp_audio/${filename}`;
+    return fs.createReadStream(filePath).pipe(res);
   }
 
   const payload = JSON.stringify({
@@ -1345,66 +1367,61 @@ async function generateElevenLabsTTS(text, bot) {
     }
   });
 
-  return new Promise((resolve, reject) => {
-    const options = {
-      hostname: 'api.elevenlabs.io',
-      path: `/v1/text-to-speech/${voiceId}`,
-      method: 'POST',
-      headers: {
-        'xi-api-key': apiKey,
-        'Content-Type': 'application/json',
-        'accept': 'audio/mpeg',
-        'Content-Length': Buffer.byteLength(payload)
-      }
-    };
+  const options = {
+    hostname: 'api.elevenlabs.io',
+    path: `/v1/text-to-speech/${voiceId}`,
+    method: 'POST',
+    headers: {
+      'xi-api-key': apiKey,
+      'Content-Type': 'application/json',
+      'accept': 'audio/mpeg',
+      'Content-Length': Buffer.byteLength(payload)
+    }
+  };
 
-    const req = https.request(options, (res) => {
-      if (res.statusCode !== 200) {
-        let errorData = '';
-        res.on('data', (chunk) => errorData += chunk);
-        res.on('end', () => {
-          reject(new Error(`ElevenLabs API returned status ${res.statusCode}: ${errorData}`));
-        });
-        return;
-      }
+  const apiReq = https.request(options, (apiRes) => {
+    if (apiRes.statusCode !== 200) {
+      console.error(`🔴 ElevenLabs API returned status ${apiRes.statusCode}`);
+      return res.status(apiRes.statusCode).end();
+    }
 
-      const chunks = [];
-      res.on('data', (chunk) => chunks.push(chunk));
-      res.on('end', () => {
-        try {
-          const buffer = Buffer.concat(chunks);
-          fs.writeFileSync(filePath, buffer);
-          resolve(`/temp_audio/${filename}`);
-        } catch (err) {
-          reject(err);
-        }
-      });
+    const chunks = [];
+    apiRes.on('data', (chunk) => {
+      chunks.push(chunk);
+      res.write(chunk);
     });
 
-    req.on('error', (err) => {
-      reject(err);
+    apiRes.on('end', () => {
+      res.end();
+      try {
+        const buffer = Buffer.concat(chunks);
+        fs.writeFileSync(filePath, buffer);
+      } catch (err) {
+        // Silently catch write errors in completely read-only environments
+        console.warn(`⚠️ Could not cache TTS file: ${err.message}`);
+      }
     });
-
-    req.write(payload);
-    req.end();
   });
-}
+
+  apiReq.on('error', (err) => {
+    console.error('🔴 ElevenLabs streaming error:', err.message);
+    res.status(500).end();
+  });
+
+  apiReq.write(payload);
+  apiReq.end();
+}));
 
 // Helper function to build TwiML voice responses, falling back to Say Polly voice if ElevenLabs fails
-async function getVoiceResponseTwiML(text, bot, req, options = {}) {
+function getVoiceResponseTwiML(text, bot, req, options = {}) {
   const language = options.language || 'en-US';
   const voice = options.voice || 'Polly.Amy';
 
   if (bot.useElevenLabs) {
-    try {
-      const audioPath = await generateElevenLabsTTS(text, bot);
-      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-      const host = req.headers.host;
-      const audioUrl = `${protocol}://${host}${audioPath}`;
-      return `<Play>${audioUrl}</Play>`;
-    } catch (err) {
-      console.error('🔴 ElevenLabs TTS generation failed, falling back to Say:', err.message);
-    }
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.headers.host;
+    const audioUrl = `${protocol}://${host}/api/voice/tts?text=${encodeURIComponent(text)}&botId=${bot.id}`;
+    return `<Play>${audioUrl}</Play>`;
   }
 
   // Fallback to standard TwiML Say
