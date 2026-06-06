@@ -27,7 +27,10 @@
       botAvatar: scriptEl?.getAttribute('data-avatar') || '🤖',
       bookingMethod: scriptEl?.getAttribute('data-booking-method') || 'builtin',
       calendlyUrl: scriptEl?.getAttribute('data-calendly-url') || '',
-      businessType: scriptEl?.getAttribute('data-business-type') || 'general'
+      businessType: scriptEl?.getAttribute('data-business-type') || 'general',
+      useVoiceAgent: scriptEl?.getAttribute('data-use-voice-agent') === 'true',
+      ownerPhone: scriptEl?.getAttribute('data-owner-phone') || '',
+      simulateVoice: scriptEl?.getAttribute('data-simulate-voice') !== 'false'
     };
   }
 
@@ -43,7 +46,10 @@
       botAvatar: bot.avatar || '🤖',
       bookingMethod: bot.bookingMethod || 'builtin',
       calendlyUrl: bot.calendlyUrl || '',
-      businessType: bot.businessType || 'general'
+      businessType: bot.businessType || 'general',
+      useVoiceAgent: bot.useVoiceAgent === true,
+      ownerPhone: bot.ownerPhone || '',
+      simulateVoice: bot.simulateVoice !== false
     };
   }
 
@@ -214,6 +220,69 @@
     .luminabot-close-btn:hover {
       background: rgba(255, 255, 255, 0.08);
       color: white;
+    }
+
+    .luminabot-phone-btn {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      display: none; /* Configured dynamically */
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, color 0.2s;
+    }
+    .luminabot-phone-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: white;
+    }
+    
+    .luminabot-phone-dropdown {
+      position: absolute;
+      top: 52px;
+      right: 0px;
+      background: #1e293b;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      padding: 12px;
+      width: 240px;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+      z-index: 99999;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      color: white;
+      font-size: 12px;
+      text-align: left;
+    }
+    .luminabot-phone-dropdown-title {
+      font-weight: 600;
+      color: #a5b4fc;
+    }
+    .luminabot-phone-dropdown-num {
+      font-family: monospace;
+      font-size: 13px;
+      color: white;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 6px 8px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .luminabot-phone-call-link {
+      color: #818cf8;
+      text-decoration: none;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .luminabot-phone-call-link:hover {
+      text-decoration: underline;
     }
 
     /* Message Area */
@@ -524,12 +593,30 @@
             <div class="luminabot-header-status">Online</div>
           </div>
         </div>
-        <button class="luminabot-close-btn" id="luminabotClose" aria-label="Close chat">
-          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
+        <div style="display: flex; align-items: center; gap: 8px; position: relative;">
+          <button class="luminabot-phone-btn" id="luminabotPhoneBtn" aria-label="Call voice assistant" style="display: ${config.useVoiceAgent && config.ownerPhone ? 'flex' : 'none'};">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+            </svg>
+          </button>
+          <button class="luminabot-close-btn" id="luminabotClose" aria-label="Close chat">
+            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+          
+          <div class="luminabot-phone-dropdown" id="luminabotPhoneDropdown">
+            <div class="luminabot-phone-dropdown-title">📞 Talk to Voice Receptionist</div>
+            <p style="margin: 4px 0 8px 0; color: #94a3b8; font-size: 11px; line-height: 1.4;">
+              Prefer to speak directly? Call our AI voice receptionist to ask questions or make reservations.
+            </p>
+            <div class="luminabot-phone-dropdown-num">
+              <span id="luminabotPhoneText">${config.ownerPhone || ''}</span>
+              <a href="tel:${config.ownerPhone || ''}" class="luminabot-phone-call-link" id="luminabotPhoneLink">Call Now</a>
+            </div>
+          </div>
+        </div>
       </div>
       
       <div class="luminabot-messages" id="luminabotMessages">
@@ -1059,8 +1146,30 @@
     panel.classList.remove('active');
     bubble.classList.remove('active');
     bubbleIcon.innerHTML = `<path d="${chatIconPath}"/>`;
+    const phoneDropdown = document.getElementById('luminabotPhoneDropdown');
+    if (phoneDropdown) phoneDropdown.style.display = 'none';
     resetChat();
   });
+
+  const phoneBtn = document.getElementById('luminabotPhoneBtn');
+  const phoneDropdown = document.getElementById('luminabotPhoneDropdown');
+  if (phoneBtn && phoneDropdown) {
+    phoneBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+        window.location.href = `tel:${config.ownerPhone}`;
+      } else {
+        const isVisible = phoneDropdown.style.display === 'flex';
+        phoneDropdown.style.display = isVisible ? 'none' : 'flex';
+      }
+    });
+    document.addEventListener('click', () => {
+      phoneDropdown.style.display = 'none';
+    });
+    phoneDropdown.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+  }
 
   // 5. AI Communication Logic
   async function handleSend() {
@@ -1459,6 +1568,19 @@
         inputEl.addEventListener('focus', () => inputEl.style.borderColor = config.themeColor);
         inputEl.addEventListener('blur', () => inputEl.style.borderColor = 'rgba(255, 255, 255, 0.1)');
       }
+
+      const phoneBtnEl = document.getElementById('luminabotPhoneBtn');
+      const phoneTextEl = document.getElementById('luminabotPhoneText');
+      const phoneLinkEl = document.getElementById('luminabotPhoneLink');
+      if (phoneBtnEl) {
+        if (config.useVoiceAgent && config.ownerPhone) {
+          phoneBtnEl.style.display = 'flex';
+        } else {
+          phoneBtnEl.style.display = 'none';
+        }
+      }
+      if (phoneTextEl) phoneTextEl.textContent = config.ownerPhone || '';
+      if (phoneLinkEl) phoneLinkEl.href = `tel:${config.ownerPhone || ''}`;
 
       // Re-initialize welcome message if history is empty or reset
       if (event.data.resetHistory) {

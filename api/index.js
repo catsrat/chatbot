@@ -42,6 +42,7 @@ function getBookingsFilePath() {
 
 // ── Middleware ──────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '2mb' })); // Support large system prompts
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '..')));      // Serve static files
 
 // Allow cross-origin requests (so any website can load the widget + fetch bot config)
@@ -849,6 +850,481 @@ function serverFetch(url, redirectCount = 0) {
     
     req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')); });
     req.on('error', reject);
+    req.end();
+  });
+}
+
+// --- Voice AI Receptionist (LuminaVoice) ---
+const callHistories = {}; // CallSid -> history
+const callWhispers = {}; // CallSid -> German summary
+const activeAlerts = {}; // bookingId -> alertState
+
+// POST /api/voice/inbound — Inbound customer call webhook
+app.post(['/api/voice/inbound', '/api/voice/inbound/:botId'], asyncHandler(async (req, res) => {
+  let botId = req.params.botId || req.query.botId;
+  const bots = await loadBots();
+  let bot = bots[botId];
+
+  // Try auto-matching based on Twilio "To" number
+  if (!bot) {
+    const toNum = req.body.To || '';
+    for (const id in bots) {
+      if (bots[id].useVoiceAgent && bots[id].ownerPhone === toNum) {
+        bot = bots[id];
+        botId = id;
+        break;
+      }
+    }
+  }
+
+  // Fallback to first bot with Voice Agent enabled if still no bot matched
+  if (!bot) {
+    for (const id in bots) {
+      if (bots[id].useVoiceAgent) {
+        bot = bots[id];
+        botId = id;
+        break;
+      }
+    }
+  }
+
+  if (!bot) {
+    res.type('text/xml');
+    return res.send(`
+      <Response>
+        <Say voice="Polly.Amy">Hello. The restaurant voice assistant is currently disabled. Goodbye.</Say>
+        <Hangup/>
+      </Response>
+    `);
+  }
+
+  const callSid = req.body.CallSid || 'sim-call-' + Math.random().toString(36).substring(7);
+  const speechText = req.body.SpeechResult || req.query.SpeechResult;
+  
+  if (!callHistories[callSid]) {
+    callHistories[callSid] = [];
+  }
+  const history = callHistories[callSid];
+
+  // Welcome caller if history is empty
+  if (!speechText && history.length === 0) {
+    const welcome = bot.welcomeMsg || "Hello! Welcome. How can I help you today?";
+    history.push({ role: 'model', text: welcome });
+    
+    if (bot.simulateVoice) {
+      console.log(`\n======================================================`);
+      console.log(`📞 [LuminaVoice INBOUND SIMULATION] Call started: ${callSid}`);
+      console.log(`🤖 AI Receptionist: "${welcome}"`);
+      console.log(`======================================================\n`);
+    }
+
+    res.type('text/xml');
+    return res.send(`
+      <Response>
+        <Say voice="Polly.Amy">${welcome}</Say>
+        <Gather input="speech" action="/api/voice/inbound?botId=${botId}" method="POST" timeout="5" speechTimeout="auto"/>
+      </Response>
+    `);
+  }
+
+  // User input
+  if (speechText) {
+    history.push({ role: 'user', text: speechText });
+    if (bot.simulateVoice) {
+      console.log(`🗣️ Customer: "${speechText}"`);
+    }
+  }
+
+  // Gemini API Call
+  const apiKey = (bot.apiKey && bot.apiKey !== 'DEMO') ? bot.apiKey : process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'DEMO') {
+    let fallbackText = "I understand. Let me check that for you.";
+    if (speechText && (speechText.toLowerCase().includes('out of') || speechText.toLowerCase().includes('stock'))) {
+      let item = "Pizza Margherita";
+      if (speechText.toLowerCase().includes('pils')) {
+        item = "Pils Beer";
+      }
+      fallbackText = `Okay, I will update that item status. [STOCK_UPDATE: item=${item}, status=out_of_stock]`;
+    } else if (speechText && (speechText.toLowerCase().includes('book') || speechText.toLowerCase().includes('reserve'))) {
+      const bDate = new Date();
+      bDate.setDate(bDate.getDate() + 1);
+      const formattedDate = bDate.toISOString().split('T')[0];
+      fallbackText = `I have registered your booking for ${formattedDate} at 19:00 under the name test caller. [BOOKING: name=test caller, date=${formattedDate}, time=19:00, guests=2]`;
+    } else if (speechText && (speechText.toLowerCase().includes('chef') || speechText.toLowerCase().includes('manager') || speechText.toLowerCase().includes('party'))) {
+      fallbackText = `I will connect you to the restaurant chef now. [TRANSFER]`;
+    } else {
+      fallbackText = `Hello! You said: "${speechText}". For testing, say "book" to test booking alerts, or say "chef" to test whisper transferring.`;
+    }
+    return await handleAIResponse(fallbackText, bot, botId, callSid, req, res, history);
+  }
+
+  try {
+    const contents = [];
+    history.forEach(h => {
+      contents.push({
+        role: h.role,
+        parts: [{ text: h.text }]
+      });
+    });
+
+    const cleanSystemPrompt = (bot.systemPrompt || '') + `
+You are a professional, polite, and helpful voice receptionist named LuminaVoice answering calls for ${bot.name}.
+Respond naturally, clearly, and extremely concisely (usually 1-2 sentences), as your text will be read by Text-to-Speech to a caller on a phone.
+Never write raw currency symbols like € or $; format all prices as numerals + words (e.g., '180 Rupees' or '81 euros') so the reader reads them correctly.
+
+BOOKINGS RULES:
+If the user indicates they want to make a reservation or book a table, ask for their:
+1. Name
+2. Date and Time of booking
+3. Number of guests
+Once they provide all details, confirm the booking to the customer verbally AND append the command [BOOKING: name=..., date=..., time=..., guests=...] at the very end of your response to trigger the system alert call.
+Example response: "Perfect! I have scheduled that booking for John on June 7th at 19:30 for 4 people. [BOOKING: name=John, date=2026-06-07, time=19:30, guests=4]"
+
+TRANSFER / COMPLEX REQUESTS RULES:
+If the customer wants to speak with the manager or chef, or has a complex request (e.g. cost reduction, custom event menu pricing, large parties of more than 15 people) that you cannot solve, tell them you are connecting them to the chef, and append the command [TRANSFER] at the very end.
+Example response: "I'll transfer you to our kitchen chef to discuss cost reductions for your family party. Please hold. [TRANSFER]"
+
+STOCK UPDATES RULES:
+If the caller claims to be a staff member or owner and tells you to update stock status of a menu item (e.g. "we are out of pils" or "mark Margherita pizza as in stock"), acknowledge it, and append [STOCK_UPDATE: item=..., status=...] where status is either "in_stock" or "out_of_stock".
+Example: "Understood, I will mark the Pils as out of stock now. [STOCK_UPDATE: item=Pils, status=out_of_stock]"
+`;
+
+    const payload = {
+      contents: contents,
+      systemInstruction: { parts: [{ text: cleanSystemPrompt }] },
+      generationConfig: { temperature: 0.7, maxOutputTokens: 512 }
+    };
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const geminiRes = await makeHttpsRequest(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    }, payload);
+
+    const aiText = geminiRes.candidates?.[0]?.content?.parts?.[0]?.text || 'I am sorry, I am having trouble understanding.';
+    await handleAIResponse(aiText, bot, botId, callSid, req, res, history);
+  } catch (err) {
+    console.error('🔴 Gemini completion error in voice webhook:', err.message);
+    const fallbackText = "I am sorry, I am having trouble processing your request. Please hold.";
+    await handleAIResponse(fallbackText, bot, botId, callSid, req, res, history);
+  }
+}));
+
+// Helper to handle AI responses, parse commands, and output TwiML
+async function handleAIResponse(aiText, bot, botId, callSid, req, res, history) {
+  let spokenText = aiText;
+  
+  // 1. Detect STOCK_UPDATE trigger
+  const stockMatch = spokenText.match(/\[STOCK_UPDATE:\s*item=([^,\]]+),\s*status=([^\]]+)\]/i);
+  if (stockMatch) {
+    const itemName = stockMatch[1].trim();
+    const newStatus = stockMatch[2].trim().toLowerCase();
+    spokenText = spokenText.replace(/\[STOCK_UPDATE:[^\]]+\]/gi, '').trim();
+
+    try {
+      const bots = await loadBots();
+      const currentBot = bots[botId];
+      if (currentBot && currentBot.inventory) {
+        let matched = false;
+        currentBot.inventory.forEach(item => {
+          if (item.name.toLowerCase() === itemName.toLowerCase() || 
+              item.name.toLowerCase().includes(itemName.toLowerCase())) {
+            item.stock = newStatus === 'in_stock' ? 'in_stock' : 'out_of_stock';
+            matched = true;
+          }
+        });
+        if (matched) {
+          await saveBots(bots);
+          console.log(`📦 [STOCK UPDATE SUCCESS]: Marked item matching "${itemName}" as ${newStatus} for Bot "${currentBot.name}"`);
+        } else {
+          console.warn(`📦 [STOCK UPDATE FAILED]: Could not find inventory item matching "${itemName}"`);
+        }
+      }
+    } catch (e) {
+      console.error('Error auto-updating stock:', e.message);
+    }
+  }
+
+  // 2. Detect BOOKING trigger
+  const bookingMatch = spokenText.match(/\[BOOKING:\s*name=([^,\]]+),\s*date=([^,\]]+),\s*time=([^,\]]+)(?:,\s*guests=([^\]]+))?\]/i);
+  if (bookingMatch) {
+    const name = bookingMatch[1].trim();
+    const date = bookingMatch[2].trim();
+    const time = bookingMatch[3].trim();
+    const guests = bookingMatch[4] ? bookingMatch[4].trim() : '2';
+    spokenText = spokenText.replace(/\[BOOKING:[^\]]+\]/gi, '').trim();
+
+    const bookings = await loadBookings();
+    const bookingId = 'booking-' + Math.random().toString(36).substring(2, 7) + Date.now().toString(36);
+    const newBooking = {
+      id: bookingId,
+      botId: botId,
+      botName: bot.name,
+      name: name,
+      contact: 'Voice Call (' + (req.body.From || 'Unknown Caller') + ')',
+      date: date,
+      time: time,
+      notes: `Reservierung für ${guests} Personen (über Sprachassistent erstellt)`,
+      webhookStatus: bot.webhookUrl ? 'pending' : 'na',
+      createdAt: new Date().toISOString()
+    };
+    bookings[bookingId] = newBooking;
+    await saveBookings(bookings);
+
+    console.log(`📅 [Voice Booking Created] ID: ${bookingId} for Bot "${bot.name}"`);
+    dispatchOutboundAlert(bot, newBooking);
+  }
+
+  // 3. Detect TRANSFER trigger
+  const transferMatch = spokenText.includes('[TRANSFER]');
+  let connectionTwiML = '';
+  if (transferMatch) {
+    spokenText = spokenText.replace('[TRANSFER]', '').trim();
+    
+    let whisperText = `Achtung Chef: Ein Kunde ruft an.`;
+    const apiKey = (bot.apiKey && bot.apiKey !== 'DEMO') ? bot.apiKey : process.env.GEMINI_API_KEY;
+    if (apiKey && apiKey !== 'DEMO') {
+      try {
+        const summaryPrompt = `
+You are a translation and summarization system. Summarize this caller's request in German for the kitchen chef/restaurant owner.
+Keep the summary under 15 words. Keep it professional.
+Conversation:
+${history.map(h => `${h.role === 'user' ? 'Customer' : 'AI'}: ${h.text}`).join('\n')}
+
+Format: "Achtung Chef: Ein Kunde ruft an wegen [Zusammenfassung]. Ich verbinde jetzt."
+`;
+        const payload = {
+          contents: [{ role: 'user', parts: [{ text: summaryPrompt }] }],
+          generationConfig: { temperature: 0.3, maxOutputTokens: 128 }
+        };
+        const summaryRes = await makeHttpsRequest(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+          payload
+        );
+        const germanText = summaryRes.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (germanText) whisperText = germanText.trim();
+      } catch (err) {
+        console.error('Error generating German whisper summary:', err.message);
+      }
+    } else {
+      whisperText = `Achtung Chef: Ein Kunde möchte mit Ihnen sprechen. Ich verbinde jetzt.`;
+    }
+
+    callWhispers[callSid] = whisperText;
+    
+    if (bot.simulateVoice) {
+      console.log(`\n======================================================`);
+      console.log(`🔀 [LuminaVoice TRANSFER INITIATED]`);
+      console.log(`📞 Connecting caller to Chef Phone: ${bot.ownerPhone}`);
+      console.log(`🤫 Private Whisper to Chef (German): "${whisperText}"`);
+      console.log(`======================================================\n`);
+    }
+
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.headers.host;
+    const whisperUrl = `${protocol}://${host}/api/voice/whisper?callSid=${callSid}`;
+    
+    connectionTwiML = `
+      <Dial>
+        <Number url="${whisperUrl}">${bot.ownerPhone || '+31206166796'}</Number>
+      </Dial>
+    `;
+  }
+
+  history.push({ role: 'model', text: spokenText });
+  if (bot.simulateVoice) {
+    console.log(`🤖 AI Receptionist: "${spokenText}"`);
+  }
+
+  res.type('text/xml');
+  if (transferMatch) {
+    res.send(`
+      <Response>
+        <Say voice="Polly.Amy">${spokenText}</Say>
+        ${connectionTwiML}
+      </Response>
+    `);
+  } else if (bookingMatch) {
+    res.send(`
+      <Response>
+        <Say voice="Polly.Amy">${spokenText}</Say>
+        <Hangup/>
+      </Response>
+    `);
+  } else {
+    res.send(`
+      <Response>
+        <Say voice="Polly.Amy">${spokenText}</Say>
+        <Gather input="speech" action="/api/voice/inbound?botId=${botId}" method="POST" timeout="5" speechTimeout="auto"/>
+      </Response>
+    `);
+  }
+}
+
+// POST /api/voice/whisper — Whisper route to read out the summary privately to the chef/owner before bridging
+app.post('/api/voice/whisper', (req, res) => {
+  const callSid = req.query.callSid || req.body.CallSid;
+  const whisper = callWhispers[callSid] || "Achtung Chef: Ein Kunde wird mit Ihnen verbunden.";
+  
+  res.type('text/xml');
+  res.send(`
+    <Response>
+      <Say voice="Polly.Amy" language="de-DE">${whisper}</Say>
+    </Response>
+  `);
+});
+
+// Outbound Alert confirmer and retry queue dispatcher
+function dispatchOutboundAlert(bot, booking) {
+  const bookingId = booking.id;
+  
+  if (!activeAlerts[bookingId]) {
+    activeAlerts[bookingId] = {
+      confirmed: false,
+      attempts: 1,
+      botId: bot.id,
+      ownerPhone: bot.ownerPhone || '+31206166796',
+      booking: booking
+    };
+  } else {
+    activeAlerts[bookingId].attempts += 1;
+  }
+
+  const alertState = activeAlerts[bookingId];
+  if (alertState.attempts > 3) {
+    console.log(`🚨 [OUTBOUND ALERT EXPIRED] Booking ${bookingId} alert call failed to receive keypress confirmation after 3 attempts.`);
+    delete activeAlerts[bookingId];
+    return;
+  }
+
+  if (bot.simulateVoice) {
+    console.log(`\n======================================================`);
+    console.log(`📞 [LuminaVoice OUTBOUND SIMULATION] (Attempt ${alertState.attempts}/3)`);
+    console.log(`Dialing landline: ${alertState.ownerPhone}`);
+    console.log(`Playing details: "Hello chef, you have a new booking from ${booking.name} for ${booking.notes}. Please press 1 to confirm this booking."`);
+    console.log(`👉 To simulate keypress 1, trigger: POST http://localhost:5001/api/voice/confirm?bookingId=${bookingId}`);
+    console.log(`======================================================\n`);
+
+    const isTesting = process.env.NODE_ENV === 'test' || process.env.TESTING_VOICE === 'true';
+    const retryTimeout = isTesting ? 1000 : 120000;
+
+    setTimeout(() => {
+      const current = activeAlerts[bookingId];
+      if (current && !current.confirmed) {
+        console.log(`⏳ [OUTBOUND ALERT RETRY] No confirmation received for booking ${bookingId} after attempt ${current.attempts}. Retrying...`);
+        dispatchOutboundAlert(bot, booking);
+      }
+    }, retryTimeout);
+  } else {
+    console.log(`📞 [Twilio Outbound Alert Call Triggered] (Attempt ${alertState.attempts}/3) for booking ${bookingId}`);
+  }
+}
+
+// POST /api/voice/confirm — Simulated endpoint to simulate keypress confirmation
+app.post('/api/voice/confirm', (req, res) => {
+  const bookingId = req.query.bookingId || req.body.bookingId;
+  const alertState = activeAlerts[bookingId];
+  if (!alertState) {
+    return res.status(404).json({ error: 'Alert not found or already completed' });
+  }
+
+  alertState.confirmed = true;
+  console.log(`✅ [OUTBOUND ALERT CONFIRMED] Booking ${bookingId} was successfully confirmed by owner!`);
+  delete activeAlerts[bookingId];
+
+  res.json({ success: true, message: "Booking confirmed, alert retry loop canceled." });
+});
+
+// POST /api/voice/outbound-alert-twiml — TwiML returned for real Twilio alert calls
+app.post('/api/voice/outbound-alert-twiml', (req, res) => {
+  const bookingId = req.query.bookingId || req.body.bookingId;
+  const alertState = activeAlerts[bookingId];
+  if (!alertState) {
+    res.type('text/xml');
+    return res.send(`
+      <Response>
+        <Say voice="Polly.Amy">Error: booking not found. Goodbye.</Say>
+        <Hangup/>
+      </Response>
+    `);
+  }
+
+  const booking = alertState.booking;
+  res.type('text/xml');
+  res.send(`
+    <Response>
+      <Gather numDigits="1" action="/api/voice/outbound-alert-confirm?bookingId=${bookingId}" method="POST" timeout="10">
+        <Say voice="Polly.Amy">Hello chef. You have a new booking from ${booking.name} on ${booking.date} at ${booking.time}. Please press 1 to confirm this booking.</Say>
+      </Gather>
+      <Say voice="Polly.Amy">We did not receive a keypress. We will call you back shortly.</Say>
+    </Response>
+  `);
+});
+
+// POST /api/voice/outbound-alert-confirm — Real Twilio Call keypress receiver
+app.post('/api/voice/outbound-alert-confirm', (req, res) => {
+  const bookingId = req.query.bookingId || req.body.bookingId;
+  const digits = req.body.Digits;
+  const alertState = activeAlerts[bookingId];
+
+  if (!alertState) {
+    res.type('text/xml');
+    return res.send(`<Response><Say>Error. Goodbye.</Say><Hangup/></Response>`);
+  }
+
+  res.type('text/xml');
+  if (digits === '1') {
+    alertState.confirmed = true;
+    console.log(`✅ [OUTBOUND ALERT CONFIRMED VIA KEYPRESS] Booking ${bookingId} confirmed.`);
+    delete activeAlerts[bookingId];
+    res.send(`
+      <Response>
+        <Say voice="Polly.Amy">Thank you. The booking is confirmed. Goodbye.</Say>
+        <Hangup/>
+      </Response>
+    `);
+  } else {
+    res.send(`
+      <Response>
+        <Say voice="Polly.Amy">Incorrect option. We will call you back shortly.</Say>
+        <Hangup/>
+      </Response>
+    `);
+  }
+});
+
+// Helper function to make standard HTTPS requests for Gemini API
+function makeHttpsRequest(url, options, bodyData) {
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(url);
+    const reqOptions = {
+      hostname: parsedUrl.hostname,
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: options.method || 'GET',
+      headers: options.headers || {}
+    };
+    
+    const req = https.request(reqOptions, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            resolve(JSON.parse(data));
+          } catch (e) {
+            resolve(data);
+          }
+        } else {
+          reject(new Error(`HTTP Error ${res.statusCode}: ${data}`));
+        }
+      });
+    });
+    
+    req.on('error', (err) => reject(err));
+    if (bodyData) {
+      req.write(typeof bodyData === 'string' ? bodyData : JSON.stringify(bodyData));
+    }
     req.end();
   });
 }

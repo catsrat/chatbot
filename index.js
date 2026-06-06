@@ -13,6 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const senderEmailInput = document.getElementById('senderEmail');
   const businessTypeSelect = document.getElementById('businessType');
   const webhookUrlInput = document.getElementById('webhookUrl');
+  const useVoiceAgentCheckbox = document.getElementById('useVoiceAgent');
+  const ownerPhoneInput = document.getElementById('ownerPhone');
+  const simulateVoiceCheckbox = document.getElementById('simulateVoice');
   const openLeadsPageBtn = document.getElementById('openLeadsPageBtn');
   const ownerPortalSection = document.getElementById('ownerPortalSection');
   const copyPortalLinkBtn = document.getElementById('copyPortalLinkBtn');
@@ -269,6 +272,16 @@ ${categoryInstructions}
       senderEmailInput.value = config.senderEmail || 'onboarding@resend.dev';
       businessTypeSelect.value = config.businessType || 'general';
       webhookUrlInput.value = config.webhookUrl || '';
+      
+      if (useVoiceAgentCheckbox) {
+        useVoiceAgentCheckbox.checked = config.useVoiceAgent === true;
+      }
+      if (ownerPhoneInput) {
+        ownerPhoneInput.value = config.ownerPhone || '';
+      }
+      if (simulateVoiceCheckbox) {
+        simulateVoiceCheckbox.checked = config.simulateVoice !== false;
+      }
 
       apiKeyInput.value = config.apiKey || 'DEMO';
       systemPromptInput.value = config.systemPrompt || '';
@@ -323,7 +336,10 @@ ${categoryInstructions}
       apiKey: apiKeyInput.value,
       systemPrompt: systemPromptInput.value,
       manualData: manualDataInput.value,
-      inventory: inventoryItems
+      inventory: inventoryItems,
+      useVoiceAgent: useVoiceAgentCheckbox ? useVoiceAgentCheckbox.checked : false,
+      ownerPhone: ownerPhoneInput ? ownerPhoneInput.value.trim() : '',
+      simulateVoice: simulateVoiceCheckbox ? simulateVoiceCheckbox.checked : true
     };
     localStorage.setItem('luminabot_config', JSON.stringify(config));
   }
@@ -405,7 +421,10 @@ ${categoryInstructions}
       botAvatar: botAvatarSelect.value,
       bookingMethod: bookingMethodInput.value,
       calendlyUrl: calendlyUrlInput.value,
-      businessType: businessTypeSelect.value
+      businessType: businessTypeSelect.value,
+      useVoiceAgent: useVoiceAgentCheckbox ? useVoiceAgentCheckbox.checked : false,
+      ownerPhone: ownerPhoneInput ? ownerPhoneInput.value.trim() : '',
+      simulateVoice: simulateVoiceCheckbox ? simulateVoiceCheckbox.checked : true
     };
 
     // Post message to the widget inside index.html window (widget.js listens to this)
@@ -434,6 +453,9 @@ ${categoryInstructions}
   data-booking-method="${config.bookingMethod}"
   data-calendly-url="${config.calendlyUrl}"
   data-business-type="${config.businessType}"
+  data-use-voice-agent="${config.useVoiceAgent}"
+  data-owner-phone="${config.ownerPhone}"
+  data-simulate-voice="${config.simulateVoice}"
   data-welcome-msg="${config.welcomeMsg.replace(/"/g, '&quot;')}" 
   data-system-prompt="${config.systemPrompt.replace(/"/g, '&quot;').replace(/\n/g, ' ')}"&gt;
 &lt;/script&gt;`;
@@ -880,6 +902,19 @@ ${categoryInstructions}
       saveCurrentConfig();
     });
   });
+
+  if (useVoiceAgentCheckbox && ownerPhoneInput && simulateVoiceCheckbox) {
+    [useVoiceAgentCheckbox, simulateVoiceCheckbox].forEach(input => {
+      input.addEventListener('change', () => {
+        saveCurrentConfig();
+        updateWidgetPreview();
+      });
+    });
+    ownerPhoneInput.addEventListener('input', () => {
+      saveCurrentConfig();
+      updateWidgetPreview();
+    });
+  }
 
   // Preset Color selection
   presetDots.forEach(dot => {
@@ -1401,7 +1436,10 @@ To configure your chatbot:
         receiverEmail: receiverEmailInput.value.trim(),
         resendApiKey: resendApiKeyInput.value.trim(),
         senderEmail: senderEmailInput.value.trim()
-      }
+      },
+      useVoiceAgent: useVoiceAgentCheckbox ? useVoiceAgentCheckbox.checked : false,
+      ownerPhone: ownerPhoneInput ? ownerPhoneInput.value.trim() : '',
+      simulateVoice: simulateVoiceCheckbox ? simulateVoiceCheckbox.checked : true
     };
   }
 
@@ -1424,6 +1462,16 @@ To configure your chatbot:
     receiverEmailInput.value = emailConfig.receiverEmail || '';
     resendApiKeyInput.value = emailConfig.resendApiKey || '';
     senderEmailInput.value = emailConfig.senderEmail || 'onboarding@resend.dev';
+
+    if (useVoiceAgentCheckbox) {
+      useVoiceAgentCheckbox.checked = bot.useVoiceAgent === true;
+    }
+    if (ownerPhoneInput) {
+      ownerPhoneInput.value = bot.ownerPhone || '';
+    }
+    if (simulateVoiceCheckbox) {
+      simulateVoiceCheckbox.checked = bot.simulateVoice !== false;
+    }
 
     scrapeUrlInput.value = bot.website || '';
     scrapeUrlInput.setAttribute('data-original-website', bot.website || '');

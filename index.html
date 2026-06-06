@@ -190,9 +190,9 @@
         </div>
       </section>
 
-      <!-- Card 3: Email & Webhook Integrations -->
+      <!-- Card 3: Voice Agent & Integrations -->
       <section class="config-card">
-        <h3 class="card-title">3. Email & Webhook Integrations</h3>
+        <h3 class="card-title">3. Voice Agent & Integrations</h3>
         
         <div class="form-group">
           <label for="receiverEmail">Owner Notification Email</label>
@@ -223,6 +223,31 @@
           <input type="text" id="webhookUrl" placeholder="https://api.example.com/webhooks/leads">
           <span style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
             POSTs lead/booking JSON payload (supports ServiceNow, Zapier, Make).
+          </span>
+        </div>
+
+        <div style="border-top: 1px dashed rgba(255, 255, 255, 0.08); padding-top: 12px; margin-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+          <span style="font-size: 11px; font-weight: 600; color: #a5b4fc; text-transform: uppercase; letter-spacing: 0.5px;">📞 Voice Receptionist (LuminaVoice)</span>
+          
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <label for="useVoiceAgent" style="cursor: pointer; user-select: none;">Enable Voice AI Receptionist</label>
+            <input type="checkbox" id="useVoiceAgent" style="width: auto; cursor: pointer;">
+          </div>
+          
+          <div class="form-group">
+            <label for="ownerPhone">Restaurant Landline (Alerts Target)</label>
+            <input type="text" id="ownerPhone" placeholder="e.g. +31206166796">
+            <span style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+              The phone number called to deliver confirmed bookings.
+            </span>
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <label for="simulateVoice" style="cursor: pointer; user-select: none;">Simulate Voice Calls in Console</label>
+            <input type="checkbox" id="simulateVoice" checked style="width: auto; cursor: pointer;">
+          </div>
+          <span style="font-size: 10px; color: var(--text-muted); margin-top: -6px;">
+            Runs without Twilio API keys by logging voice interactions in the server terminal.
           </span>
         </div>
       </section>
