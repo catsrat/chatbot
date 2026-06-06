@@ -1201,7 +1201,7 @@
     }
   }
 
-  let activeModel = sessionStorage.getItem('luminabot_active_model') || 'gemini-1.5-flash';
+  let activeModel = sessionStorage.getItem('luminabot_active_model') || 'gemini-2.0-flash';
 
   async function getAIChatCompletion(userPrompt) {
     const apiKey = config.apiKey || scriptEl?.getAttribute('data-api-key') || '';
