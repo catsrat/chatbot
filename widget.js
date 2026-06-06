@@ -26,7 +26,8 @@
       placeholder: scriptEl?.getAttribute('data-placeholder') || 'Ask me anything...',
       botAvatar: scriptEl?.getAttribute('data-avatar') || '🤖',
       bookingMethod: scriptEl?.getAttribute('data-booking-method') || 'builtin',
-      calendlyUrl: scriptEl?.getAttribute('data-calendly-url') || ''
+      calendlyUrl: scriptEl?.getAttribute('data-calendly-url') || '',
+      businessType: scriptEl?.getAttribute('data-business-type') || 'general'
     };
   }
 
@@ -41,7 +42,8 @@
       placeholder: 'Ask me anything...',
       botAvatar: bot.avatar || '🤖',
       bookingMethod: bot.bookingMethod || 'builtin',
-      calendlyUrl: bot.calendlyUrl || ''
+      calendlyUrl: bot.calendlyUrl || '',
+      businessType: bot.businessType || 'general'
     };
   }
 
@@ -76,6 +78,7 @@
       right: 24px;
       z-index: 999999;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --luminabot-theme-color: ${config.themeColor};
     }
     
     /* Chat Bubble Trigger */
@@ -83,7 +86,7 @@
       width: 60px;
       height: 60px;
       border-radius: 30px;
-      background-color: ${config.themeColor};
+      background-color: var(--luminabot-theme-color);
       box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
       cursor: pointer;
       display: flex;
@@ -96,6 +99,9 @@
       transform: scale(1.08) translateY(-2px);
       box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
     }
+    .luminabot-bubble:not(.active) {
+      animation: luminabot-pulse-ring 2.5s infinite;
+    }
     .luminabot-bubble svg {
       width: 28px;
       height: 28px;
@@ -106,6 +112,21 @@
       transform: rotate(90deg) scale(0.8);
     }
 
+    @keyframes luminabot-pulse-ring {
+      0% {
+        box-shadow: 0 0 0 0 var(--luminabot-theme-color);
+        transform: scale(1);
+      }
+      70% {
+        box-shadow: 0 0 0 10px rgba(0, 0, 0, 0);
+        transform: scale(1.03);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+        transform: scale(1);
+      }
+    }
+
     /* Chat Panel */
     .luminabot-panel {
       position: absolute;
@@ -114,8 +135,10 @@
       width: 360px;
       height: 520px;
       border-radius: 16px;
-      background-color: #0f172a; /* Slate 900 */
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background-color: rgba(15, 23, 42, 0.85); /* Glassmorphism translucency */
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
       display: flex;
       flex-direction: column;
@@ -134,7 +157,7 @@
 
     /* Header */
     .luminabot-header {
-      background-color: #1e293b; /* Slate 800 */
+      background-color: rgba(30, 41, 59, 0.7); /* Translucent */
       padding: 16px;
       color: white;
       display: flex;
@@ -201,7 +224,7 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
-      background: radial-gradient(circle at top left, #1e293b, #0f172a);
+      background: radial-gradient(circle at top left, rgba(30, 41, 59, 0.6), rgba(15, 23, 42, 0.85));
     }
     
     .luminabot-messages::-webkit-scrollbar {
@@ -222,10 +245,21 @@
       font-size: 13px;
       line-height: 1.5;
       word-wrap: break-word;
+      animation: luminabot-message-appear 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+      opacity: 0;
+      transform: translateY(8px);
     }
+
+    @keyframes luminabot-message-appear {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
     .luminabot-msg-user {
       align-self: flex-end;
-      background-color: ${config.themeColor};
+      background-color: var(--luminabot-theme-color);
       color: white;
       border-bottom-right-radius: 2px;
       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
@@ -264,10 +298,37 @@
       40% { transform: scale(1); }
     }
 
+    /* Suggestion Chips */
+    .luminabot-chips-container::-webkit-scrollbar {
+      display: none;
+    }
+    .luminabot-chip {
+      background-color: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #e2e8f0;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-block;
+      user-select: none;
+    }
+    .luminabot-chip:hover {
+      background-color: rgba(255, 255, 255, 0.12);
+      border-color: var(--luminabot-theme-color);
+      color: white;
+      transform: translateY(-1px);
+    }
+    .luminabot-chip:active {
+      transform: translateY(0);
+    }
+
     /* Input Footer */
     .luminabot-footer {
       padding: 12px 16px;
-      background-color: #1e293b;
+      background-color: rgba(30, 41, 59, 0.7); /* Translucent */
       border-top: 1px solid rgba(255, 255, 255, 0.08);
       display: flex;
       flex-direction: column;
@@ -481,6 +542,7 @@
       </div>
 
       <div class="luminabot-footer">
+        <div class="luminabot-chips-container" id="luminabotChipsContainer" style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 2px; scrollbar-width: none;"></div>
         <div class="luminabot-input-row">
           <input type="text" class="luminabot-input" id="luminabotInput" placeholder="${config.placeholder}" autocomplete="off" />
           <button class="luminabot-send-btn" id="luminabotSend" aria-label="Send message">
@@ -552,6 +614,50 @@
     chatHistory = [];
     sessionStorage.removeItem(storageKey);
     addMessage(config.welcomeMsg, 'model');
+    updateSuggestionChips();
+  }
+
+  function updateSuggestionChips() {
+    const container = document.getElementById('luminabotChipsContainer');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    const bizType = config.businessType || 'general';
+    let chips = [];
+    
+    if (bizType === 'banking') {
+      chips = ["Opening an Account", "Savings & Investments", "Report Lost Card"];
+    } else if (bizType === 'hospital') {
+      chips = ["Book Doctor Visit", "Check Clinic Hours", "Inquire Symptoms"];
+    } else if (bizType === 'hotel') {
+      chips = ["Book Room Reservation", "Room Rates & Amenities", "Local Attractions"];
+    } else if (bizType === 'restaurant') {
+      chips = ["Book Table Reservation", "Browse Food Menu", "Dietary Restrictions"];
+    } else if (bizType === 'realestate') {
+      chips = ["Schedule Property Viewing", "Buy/Rent Listings", "Calculate Budget"];
+    } else if (bizType === 'trades') {
+      chips = ["Request Service Visit", "Get Repair Quote", "Emergency Hotline"];
+    } else if (bizType === 'retail') {
+      chips = ["Best Sellers & Prices", "Customization/Allergies", "Browse Sweets Catalog"];
+    } else if (bizType === 'support') {
+      chips = ["Raise Support Incident", "Troubleshoot Internet Connection", "Check Support FAQs"];
+    } else if (bizType === 'portfolio') {
+      chips = ["Schedule a Consultation", "View Projects & Experience", "Ask for Resume"];
+    } else {
+      chips = ["Book Appointment", "About the Business", "Operating Hours"];
+    }
+    
+    chips.forEach(chipText => {
+      const pill = document.createElement('div');
+      pill.className = 'luminabot-chip';
+      pill.textContent = chipText;
+      pill.addEventListener('click', () => {
+        chatInput.value = chipText;
+        handleSend();
+      });
+      container.appendChild(pill);
+    });
+    container.style.display = 'flex';
   }
 
   function renderMessage(text, role) {
@@ -950,6 +1056,10 @@
     const text = chatInput.value.trim();
     if (!text) return;
 
+    // Hide suggestion chips while generating
+    const chipsContainer = document.getElementById('luminabotChipsContainer');
+    if (chipsContainer) chipsContainer.style.display = 'none';
+
     chatInput.value = '';
     addMessage(text, 'user');
     
@@ -965,6 +1075,9 @@
     } catch (err) {
       typingIndicator.style.display = 'none';
       addMessage(`Error: ${err.message || 'Something went wrong.'}`, 'model');
+    } finally {
+      // Show chips again
+      if (chipsContainer) chipsContainer.style.display = 'flex';
     }
   }
 
@@ -1281,6 +1394,10 @@
 
   // Initialize
   initHistory();
+  updateSuggestionChips();
+  if (widgetContainer) {
+    widgetContainer.style.setProperty('--luminabot-theme-color', config.themeColor);
+  }
 
   window.addEventListener('message', (event) => {
     if (event.data?.type === 'LUMINABOT_CONFIG_UPDATE') {
@@ -1300,6 +1417,12 @@
       config.botAvatar = newConfig.botAvatar;
       config.bookingMethod = newConfig.bookingMethod || 'builtin';
       config.calendlyUrl = newConfig.calendlyUrl;
+      config.businessType = newConfig.businessType || 'general';
+
+      // Update DOM theme color property
+      if (widgetContainer) {
+        widgetContainer.style.setProperty('--luminabot-theme-color', config.themeColor);
+      }
 
       // Update DOM
       const titleEl = document.getElementById('luminabotTitle');
@@ -1322,6 +1445,8 @@
       // Re-initialize welcome message if history is empty or reset
       if (event.data.resetHistory) {
         resetChat();
+      } else {
+        updateSuggestionChips();
       }
     }
   });
