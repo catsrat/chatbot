@@ -16,6 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const useVoiceAgentCheckbox = document.getElementById('useVoiceAgent');
   const ownerPhoneInput = document.getElementById('ownerPhone');
   const simulateVoiceCheckbox = document.getElementById('simulateVoice');
+  const useElevenLabsCheckbox = document.getElementById('useElevenLabs');
+  const elevenLabsApiKeyInput = document.getElementById('elevenLabsApiKey');
+  const elevenLabsVoiceIdInput = document.getElementById('elevenLabsVoiceId');
   const openLeadsPageBtn = document.getElementById('openLeadsPageBtn');
   const ownerPortalSection = document.getElementById('ownerPortalSection');
   const copyPortalLinkBtn = document.getElementById('copyPortalLinkBtn');
@@ -282,6 +285,15 @@ ${categoryInstructions}
       if (simulateVoiceCheckbox) {
         simulateVoiceCheckbox.checked = config.simulateVoice !== false;
       }
+      if (useElevenLabsCheckbox) {
+        useElevenLabsCheckbox.checked = config.useElevenLabs === true;
+      }
+      if (elevenLabsApiKeyInput) {
+        elevenLabsApiKeyInput.value = config.elevenLabsApiKey || '';
+      }
+      if (elevenLabsVoiceIdInput) {
+        elevenLabsVoiceIdInput.value = config.elevenLabsVoiceId || '';
+      }
 
       apiKeyInput.value = config.apiKey || 'DEMO';
       systemPromptInput.value = config.systemPrompt || '';
@@ -339,7 +351,10 @@ ${categoryInstructions}
       inventory: inventoryItems,
       useVoiceAgent: useVoiceAgentCheckbox ? useVoiceAgentCheckbox.checked : false,
       ownerPhone: ownerPhoneInput ? ownerPhoneInput.value.trim() : '',
-      simulateVoice: simulateVoiceCheckbox ? simulateVoiceCheckbox.checked : true
+      simulateVoice: simulateVoiceCheckbox ? simulateVoiceCheckbox.checked : true,
+      useElevenLabs: useElevenLabsCheckbox ? useElevenLabsCheckbox.checked : false,
+      elevenLabsApiKey: elevenLabsApiKeyInput ? elevenLabsApiKeyInput.value.trim() : '',
+      elevenLabsVoiceId: elevenLabsVoiceIdInput ? elevenLabsVoiceIdInput.value.trim() : ''
     };
     localStorage.setItem('luminabot_config', JSON.stringify(config));
   }
@@ -424,7 +439,8 @@ ${categoryInstructions}
       businessType: businessTypeSelect.value,
       useVoiceAgent: useVoiceAgentCheckbox ? useVoiceAgentCheckbox.checked : false,
       ownerPhone: ownerPhoneInput ? ownerPhoneInput.value.trim() : '',
-      simulateVoice: simulateVoiceCheckbox ? simulateVoiceCheckbox.checked : true
+      simulateVoice: simulateVoiceCheckbox ? simulateVoiceCheckbox.checked : true,
+      useElevenLabs: useElevenLabsCheckbox ? useElevenLabsCheckbox.checked : false
     };
 
     // Post message to the widget inside index.html window (widget.js listens to this)
@@ -913,6 +929,19 @@ ${categoryInstructions}
     ownerPhoneInput.addEventListener('input', () => {
       saveCurrentConfig();
       updateWidgetPreview();
+    });
+  }
+
+  if (useElevenLabsCheckbox && elevenLabsApiKeyInput && elevenLabsVoiceIdInput) {
+    useElevenLabsCheckbox.addEventListener('change', () => {
+      saveCurrentConfig();
+      updateWidgetPreview();
+    });
+    [elevenLabsApiKeyInput, elevenLabsVoiceIdInput].forEach(input => {
+      input.addEventListener('input', () => {
+        saveCurrentConfig();
+        updateWidgetPreview();
+      });
     });
   }
 
@@ -1439,7 +1468,10 @@ To configure your chatbot:
       },
       useVoiceAgent: useVoiceAgentCheckbox ? useVoiceAgentCheckbox.checked : false,
       ownerPhone: ownerPhoneInput ? ownerPhoneInput.value.trim() : '',
-      simulateVoice: simulateVoiceCheckbox ? simulateVoiceCheckbox.checked : true
+      simulateVoice: simulateVoiceCheckbox ? simulateVoiceCheckbox.checked : true,
+      useElevenLabs: useElevenLabsCheckbox ? useElevenLabsCheckbox.checked : false,
+      elevenLabsApiKey: elevenLabsApiKeyInput ? elevenLabsApiKeyInput.value.trim() : '',
+      elevenLabsVoiceId: elevenLabsVoiceIdInput ? elevenLabsVoiceIdInput.value.trim() : ''
     };
   }
 
@@ -1471,6 +1503,15 @@ To configure your chatbot:
     }
     if (simulateVoiceCheckbox) {
       simulateVoiceCheckbox.checked = bot.simulateVoice !== false;
+    }
+    if (useElevenLabsCheckbox) {
+      useElevenLabsCheckbox.checked = bot.useElevenLabs === true;
+    }
+    if (elevenLabsApiKeyInput) {
+      elevenLabsApiKeyInput.value = bot.elevenLabsApiKey || '';
+    }
+    if (elevenLabsVoiceIdInput) {
+      elevenLabsVoiceIdInput.value = bot.elevenLabsVoiceId || '';
     }
 
     scrapeUrlInput.value = bot.website || '';

@@ -11,9 +11,16 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = 5001;
+
+// Ensure temp_audio directory exists for caching TTS files
+const tempAudioDir = path.join(__dirname, '..', 'temp_audio');
+if (!fs.existsSync(tempAudioDir)) {
+  fs.mkdirSync(tempAudioDir, { recursive: true });
+}
 // Database paths (local vs writable /tmp fallback for serverless read-only environments)
 const LOCAL_BOTS_FILE = path.join(__dirname, '..', 'bots.json');
 const LOCAL_BOOKINGS_FILE = path.join(__dirname, '..', 'bookings.json');
@@ -919,9 +926,10 @@ app.post(['/api/voice/inbound', '/api/voice/inbound/:botId'], asyncHandler(async
     }
 
     res.type('text/xml');
+    const welcomePlay = await getVoiceResponseTwiML(welcome, bot, req);
     return res.send(`
       <Response>
-        <Say voice="Polly.Amy">${welcome}</Say>
+        ${welcomePlay}
         <Gather input="speech" action="/api/voice/inbound?botId=${botId}" method="POST" timeout="5" speechTimeout="auto"/>
       </Response>
     `);
@@ -995,7 +1003,7 @@ Example: "Understood, I will mark the Pils as out of stock now. [STOCK_UPDATE: i
       generationConfig: { temperature: 0.7, maxOutputTokens: 512 }
     };
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
     const geminiRes = await makeHttpsRequest(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
@@ -1098,7 +1106,7 @@ Format: "Achtung Chef: Ein Kunde ruft an wegen [Zusammenfassung]. Ich verbinde j
           generationConfig: { temperature: 0.3, maxOutputTokens: 128 }
         };
         const summaryRes = await makeHttpsRequest(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
           { method: 'POST', headers: { 'Content-Type': 'application/json' } },
           payload
         );
@@ -1123,7 +1131,7 @@ Format: "Achtung Chef: Ein Kunde ruft an wegen [Zusammenfassung]. Ich verbinde j
 
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
     const host = req.headers.host;
-    const whisperUrl = `${protocol}://${host}/api/voice/whisper?callSid=${callSid}`;
+    const whisperUrl = `${protocol}://${host}/api/voice/whisper?callSid=${callSid}&botId=${botId}`;
     
     connectionTwiML = `
       <Dial>
@@ -1138,24 +1146,25 @@ Format: "Achtung Chef: Ein Kunde ruft an wegen [Zusammenfassung]. Ich verbinde j
   }
 
   res.type('text/xml');
+  const spokenPlay = await getVoiceResponseTwiML(spokenText, bot, req);
   if (transferMatch) {
     res.send(`
       <Response>
-        <Say voice="Polly.Amy">${spokenText}</Say>
+        ${spokenPlay}
         ${connectionTwiML}
       </Response>
     `);
   } else if (bookingMatch) {
     res.send(`
       <Response>
-        <Say voice="Polly.Amy">${spokenText}</Say>
+        ${spokenPlay}
         <Hangup/>
       </Response>
     `);
   } else {
     res.send(`
       <Response>
-        <Say voice="Polly.Amy">${spokenText}</Say>
+        ${spokenPlay}
         <Gather input="speech" action="/api/voice/inbound?botId=${botId}" method="POST" timeout="5" speechTimeout="auto"/>
       </Response>
     `);
@@ -1163,17 +1172,21 @@ Format: "Achtung Chef: Ein Kunde ruft an wegen [Zusammenfassung]. Ich verbinde j
 }
 
 // POST /api/voice/whisper — Whisper route to read out the summary privately to the chef/owner before bridging
-app.post('/api/voice/whisper', (req, res) => {
+app.post('/api/voice/whisper', asyncHandler(async (req, res) => {
   const callSid = req.query.callSid || req.body.CallSid;
+  const botId = req.query.botId || req.body.BotId;
+  const bots = await loadBots();
+  const bot = bots[botId] || {};
   const whisper = callWhispers[callSid] || "Achtung Chef: Ein Kunde wird mit Ihnen verbunden.";
   
   res.type('text/xml');
+  const whisperPlay = await getVoiceResponseTwiML(whisper, bot, req, { language: 'de-DE' });
   res.send(`
     <Response>
-      <Say voice="Polly.Amy" language="de-DE">${whisper}</Say>
+      ${whisperPlay}
     </Response>
   `);
-});
+}));
 
 // Outbound Alert confirmer and retry queue dispatcher
 function dispatchOutboundAlert(bot, booking) {
@@ -1237,7 +1250,7 @@ app.post('/api/voice/confirm', (req, res) => {
 });
 
 // POST /api/voice/outbound-alert-twiml — TwiML returned for real Twilio alert calls
-app.post('/api/voice/outbound-alert-twiml', (req, res) => {
+app.post('/api/voice/outbound-alert-twiml', asyncHandler(async (req, res) => {
   const bookingId = req.query.bookingId || req.body.bookingId;
   const alertState = activeAlerts[bookingId];
   if (!alertState) {
@@ -1250,20 +1263,25 @@ app.post('/api/voice/outbound-alert-twiml', (req, res) => {
     `);
   }
 
+  const bots = await loadBots();
+  const bot = bots[alertState.botId] || {};
   const booking = alertState.booking;
   res.type('text/xml');
+  const promptText = `Hello chef. You have a new booking from ${booking.name} on ${booking.date} at ${booking.time}. Please press 1 to confirm this booking.`;
+  const gatherPlay = await getVoiceResponseTwiML(promptText, bot, req);
+  const noKeypressPlay = await getVoiceResponseTwiML("We did not receive a keypress. We will call you back shortly.", bot, req);
   res.send(`
     <Response>
       <Gather numDigits="1" action="/api/voice/outbound-alert-confirm?bookingId=${bookingId}" method="POST" timeout="10">
-        <Say voice="Polly.Amy">Hello chef. You have a new booking from ${booking.name} on ${booking.date} at ${booking.time}. Please press 1 to confirm this booking.</Say>
+        ${gatherPlay}
       </Gather>
-      <Say voice="Polly.Amy">We did not receive a keypress. We will call you back shortly.</Say>
+      ${noKeypressPlay}
     </Response>
   `);
-});
+}));
 
 // POST /api/voice/outbound-alert-confirm — Real Twilio Call keypress receiver
-app.post('/api/voice/outbound-alert-confirm', (req, res) => {
+app.post('/api/voice/outbound-alert-confirm', asyncHandler(async (req, res) => {
   const bookingId = req.query.bookingId || req.body.bookingId;
   const digits = req.body.Digits;
   const alertState = activeAlerts[bookingId];
@@ -1273,26 +1291,126 @@ app.post('/api/voice/outbound-alert-confirm', (req, res) => {
     return res.send(`<Response><Say>Error. Goodbye.</Say><Hangup/></Response>`);
   }
 
+  const bots = await loadBots();
+  const bot = bots[alertState.botId] || {};
+
   res.type('text/xml');
   if (digits === '1') {
     alertState.confirmed = true;
     console.log(`✅ [OUTBOUND ALERT CONFIRMED VIA KEYPRESS] Booking ${bookingId} confirmed.`);
     delete activeAlerts[bookingId];
+    const confirmPlay = await getVoiceResponseTwiML("Thank you. The booking is confirmed. Goodbye.", bot, req);
     res.send(`
       <Response>
-        <Say voice="Polly.Amy">Thank you. The booking is confirmed. Goodbye.</Say>
+        ${confirmPlay}
         <Hangup/>
       </Response>
     `);
   } else {
+    const incorrectPlay = await getVoiceResponseTwiML("Incorrect option. We will call you back shortly.", bot, req);
     res.send(`
       <Response>
-        <Say voice="Polly.Amy">Incorrect option. We will call you back shortly.</Say>
+        ${incorrectPlay}
         <Hangup/>
       </Response>
     `);
   }
-});
+}));
+
+// Generate ElevenLabs Text-to-Speech audio and write to disk, using MD5 cache
+async function generateElevenLabsTTS(text, bot) {
+  const apiKey = (bot.elevenLabsApiKey && bot.elevenLabsApiKey.trim())
+    ? bot.elevenLabsApiKey.trim()
+    : 'sk_7745c909b8cc85e87df61d1f06f8091ca5c330de27e374e7';
+
+  const voiceId = (bot.elevenLabsVoiceId && bot.elevenLabsVoiceId.trim())
+    ? bot.elevenLabsVoiceId.trim()
+    : 'XrExE9yKIg1WjnnlVkGX'; // Matilda default
+
+  const textHash = crypto.createHash('md5').update(text + '_' + voiceId).digest('hex');
+  const filename = `tts_${textHash}.mp3`;
+  const filePath = path.join(__dirname, '..', 'temp_audio', filename);
+
+  // Return early if file already exists in cache
+  if (fs.existsSync(filePath)) {
+    return `/temp_audio/${filename}`;
+  }
+
+  const payload = JSON.stringify({
+    text: text,
+    model_id: "eleven_turbo_v2_5",
+    voice_settings: {
+      stability: 0.5,
+      similarity_boost: 0.75
+    }
+  });
+
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'api.elevenlabs.io',
+      path: `/v1/text-to-speech/${voiceId}`,
+      method: 'POST',
+      headers: {
+        'xi-api-key': apiKey,
+        'Content-Type': 'application/json',
+        'accept': 'audio/mpeg',
+        'Content-Length': Buffer.byteLength(payload)
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      if (res.statusCode !== 200) {
+        let errorData = '';
+        res.on('data', (chunk) => errorData += chunk);
+        res.on('end', () => {
+          reject(new Error(`ElevenLabs API returned status ${res.statusCode}: ${errorData}`));
+        });
+        return;
+      }
+
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        try {
+          const buffer = Buffer.concat(chunks);
+          fs.writeFileSync(filePath, buffer);
+          resolve(`/temp_audio/${filename}`);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+
+    req.on('error', (err) => {
+      reject(err);
+    });
+
+    req.write(payload);
+    req.end();
+  });
+}
+
+// Helper function to build TwiML voice responses, falling back to Say Polly voice if ElevenLabs fails
+async function getVoiceResponseTwiML(text, bot, req, options = {}) {
+  const language = options.language || 'en-US';
+  const voice = options.voice || 'Polly.Amy';
+
+  if (bot.useElevenLabs) {
+    try {
+      const audioPath = await generateElevenLabsTTS(text, bot);
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      const host = req.headers.host;
+      const audioUrl = `${protocol}://${host}${audioPath}`;
+      return `<Play>${audioUrl}</Play>`;
+    } catch (err) {
+      console.error('🔴 ElevenLabs TTS generation failed, falling back to Say:', err.message);
+    }
+  }
+
+  // Fallback to standard TwiML Say
+  const langAttr = language !== 'en-US' ? ` language="${language}"` : '';
+  return `<Say voice="${voice}"${langAttr}>${text}</Say>`;
+}
 
 // Helper function to make standard HTTPS requests for Gemini API
 function makeHttpsRequest(url, options, bodyData) {

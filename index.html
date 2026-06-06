@@ -249,6 +249,26 @@
           <span style="font-size: 10px; color: var(--text-muted); margin-top: -6px;">
             Runs without Twilio API keys by logging voice interactions in the server terminal.
           </span>
+
+          <div style="border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <label for="useElevenLabs" style="cursor: pointer; user-select: none;">Use ElevenLabs Realistic Voice</label>
+              <input type="checkbox" id="useElevenLabs" style="width: auto; cursor: pointer;">
+            </div>
+            
+            <div class="form-group">
+              <label for="elevenLabsApiKey">ElevenLabs API Key</label>
+              <input type="password" id="elevenLabsApiKey" placeholder="sk_...">
+            </div>
+
+            <div class="form-group">
+              <label for="elevenLabsVoiceId">ElevenLabs Voice ID (Optional)</label>
+              <input type="text" id="elevenLabsVoiceId" placeholder="e.g. 21m00Tcm4TlvDq8ikWAM (Rachel)">
+              <span style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+                Leave empty to use the default professional voice.
+              </span>
+            </div>
+          </div>
         </div>
       </section>
 
