@@ -61,6 +61,30 @@ document.addEventListener('DOMContentLoaded', () => {
       fullTrainingData += `\nMANUAL SUPPLEMENT (prices, menu, extra info):\n${manualSupp}\n`;
     }
 
+    // Append structured inventory supplements if configured
+    const inventoryItems = [];
+    document.querySelectorAll('.inventory-item-row').forEach(row => {
+      const name = row.querySelector('.inv-name').value.trim();
+      const price = row.querySelector('.inv-price').value.trim();
+      const stock = row.querySelector('.inv-stock').value;
+      if (name) {
+        inventoryItems.push({ name, price, stock });
+      }
+    });
+
+    if (inventoryItems.length > 0) {
+      fullTrainingData += `\nSTRUCTURED PRODUCT INVENTORY & PRICES CATALOG:\n`;
+      inventoryItems.forEach(item => {
+        const stockLabel = item.stock === 'in_stock' ? 'In Stock' : 'Out of Stock';
+        fullTrainingData += `- ${item.name}: ${item.price} (${stockLabel})\n`;
+      });
+      
+      const inStockItems = inventoryItems.filter(i => i.stock === 'in_stock').map(i => i.name);
+      if (inStockItems.length > 0) {
+        fullTrainingData += `\nIf a visitor inquires about any product that is Out of Stock, apologize politely and suggest one of these In Stock alternatives: ${inStockItems.join(', ')}.\n`;
+      }
+    }
+
     const bookingMethodVal = bookingMethodInput.value;
     const bookingLink = bookingMethodVal === 'builtin' ? '#book-form' : (calendlyUrlInput.value.trim() || 'https://calendly.com/mock-dentist');
     
@@ -252,6 +276,16 @@ ${categoryInstructions}
       // Load manualData
       manualDataInput.value = config.manualData || '';
       
+      // Load inventory catalog rows
+      const inventoryContainer = document.getElementById('inventoryItemsContainer');
+      if (inventoryContainer) {
+        inventoryContainer.innerHTML = '';
+        const items = config.inventory || [];
+        items.forEach(item => {
+          addInventoryRow(item.name, item.price, item.stock);
+        });
+      }
+
       // Parse systemPrompt to recover lastScrapedDataText and lastScrapedDomain
       parseLoadedSystemPrompt(config.systemPrompt || '');
       
@@ -262,6 +296,16 @@ ${categoryInstructions}
 
   // 2. LocalStorage Persist Save
   function saveCurrentConfig() {
+    const inventoryItems = [];
+    document.querySelectorAll('.inventory-item-row').forEach(row => {
+      const name = row.querySelector('.inv-name').value.trim();
+      const price = row.querySelector('.inv-price').value.trim();
+      const stock = row.querySelector('.inv-stock').value;
+      if (name) {
+        inventoryItems.push({ name, price, stock });
+      }
+    });
+
     const config = {
       botName: botNameInput.value,
       botAvatar: botAvatarSelect.value,
@@ -278,9 +322,63 @@ ${categoryInstructions}
 
       apiKey: apiKeyInput.value,
       systemPrompt: systemPromptInput.value,
-      manualData: manualDataInput.value
+      manualData: manualDataInput.value,
+      inventory: inventoryItems
     };
     localStorage.setItem('luminabot_config', JSON.stringify(config));
+  }
+
+  function addInventoryRow(name = '', price = '', stock = 'in_stock') {
+    const container = document.getElementById('inventoryItemsContainer');
+    if (!container) return;
+
+    const row = document.createElement('div');
+    row.className = 'inventory-item-row';
+    row.style.display = 'flex';
+    row.style.gap = '6px';
+    row.style.alignItems = 'center';
+    row.style.marginTop = '4px';
+
+    row.innerHTML = `
+      <input type="text" class="inv-name" placeholder="Item Name" style="flex: 2; font-size: 11px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;" value="${escapeHTMLAttribute(name)}" required />
+      <input type="text" class="inv-price" placeholder="Price" style="flex: 1; font-size: 11px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;" value="${escapeHTMLAttribute(price)}" required />
+      <select class="inv-stock" style="flex: 1; font-size: 11px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px; background: white; box-sizing: border-box;">
+        <option value="in_stock" ${stock === 'in_stock' ? 'selected' : ''}>In Stock</option>
+        <option value="out_of_stock" ${stock === 'out_of_stock' ? 'selected' : ''}>Out of Stock</option>
+      </select>
+      <button type="button" class="inv-delete-btn" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      </button>
+    `;
+
+    row.querySelector('.inv-delete-btn').addEventListener('click', () => {
+      row.remove();
+      saveCurrentConfig();
+      compileSystemPrompt();
+      updateWidgetPreview();
+    });
+
+    row.querySelectorAll('input, select').forEach(input => {
+      input.addEventListener('input', () => {
+        saveCurrentConfig();
+        compileSystemPrompt();
+        updateWidgetPreview();
+      });
+      input.addEventListener('change', () => {
+        saveCurrentConfig();
+        compileSystemPrompt();
+        updateWidgetPreview();
+      });
+    });
+
+    container.appendChild(row);
+  }
+
+  function escapeHTMLAttribute(str) {
+    return (str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   // 3. Update active color preset dot selector
@@ -1275,6 +1373,16 @@ To configure your chatbot:
 
   // Gather current form data into a bot object
   function collectFormData() {
+    const inventoryItems = [];
+    document.querySelectorAll('.inventory-item-row').forEach(row => {
+      const name = row.querySelector('.inv-name').value.trim();
+      const price = row.querySelector('.inv-price').value.trim();
+      const stock = row.querySelector('.inv-stock').value;
+      if (name) {
+        inventoryItems.push({ name, price, stock });
+      }
+    });
+
     return {
       name: botNameInput.value.trim() || 'Unnamed Bot',
       avatar: botAvatarSelect.value || '🤖',
@@ -1288,6 +1396,7 @@ To configure your chatbot:
       webhookUrl: webhookUrlInput.value.trim(),
       website: scrapeUrlInput.value.trim(),
       manualData: manualDataInput.value.trim(),
+      inventory: inventoryItems,
       emailConfig: {
         receiverEmail: receiverEmailInput.value.trim(),
         resendApiKey: resendApiKeyInput.value.trim(),
@@ -1322,6 +1431,16 @@ To configure your chatbot:
     
     // Load manualData
     manualDataInput.value = bot.manualData || '';
+
+    // Load inventory catalog rows
+    const inventoryContainer = document.getElementById('inventoryItemsContainer');
+    if (inventoryContainer) {
+      inventoryContainer.innerHTML = '';
+      const items = bot.inventory || [];
+      items.forEach(item => {
+        addInventoryRow(item.name, item.price, item.stock);
+      });
+    }
     
     // Parse systemPrompt to recover lastScrapedDataText and lastScrapedDomain
     parseLoadedSystemPrompt(bot.systemPrompt || '');
@@ -1601,6 +1720,27 @@ To configure your chatbot:
         rawText = notesVal.substring('[Appointment] '.length);
       }
 
+      let webhookBadgeHTML = '';
+      if (booking.webhookStatus === 'success') {
+        webhookBadgeHTML = `
+          <span style="background:#e2fbe8; color:#10b981; border:1px solid #a7f3d0; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:700; font-family:var(--font-sans); margin-left:4px; display:inline-flex; align-items:center; gap:3px; vertical-align:middle;" title="Successfully synced to ServiceNow / Webhook">
+            <span style="width:5px; height:5px; background:#10b981; border-radius:50%; display:inline-block;"></span> Synced
+          </span>
+        `;
+      } else if (booking.webhookStatus === 'failed') {
+        webhookBadgeHTML = `
+          <span style="background:#fdf2f2; color:#ef4444; border:1px solid #fecaca; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:700; font-family:var(--font-sans); margin-left:4px; display:inline-flex; align-items:center; gap:3px; vertical-align:middle;" title="Webhook sync failed. Check target URL.">
+            <span style="width:5px; height:5px; background:#ef4444; border-radius:50%; display:inline-block;"></span> Failed
+          </span>
+        `;
+      } else if (booking.webhookStatus === 'pending') {
+        webhookBadgeHTML = `
+          <span style="background:#fef3c7; color:#d97706; border:1px solid #fcd34d; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:700; font-family:var(--font-sans); margin-left:4px; display:inline-flex; align-items:center; gap:3px; vertical-align:middle;" title="Webhook request is pending...">
+            <span style="width:5px; height:5px; background:#d97706; border-radius:50%; display:inline-block;"></span> Pending
+          </span>
+        `;
+      }
+
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td style="padding: 12px 16px; font-weight: 600; color: #0f172a; font-family: var(--font-display);">${escapeHTML(booking.name)}</td>
@@ -1608,6 +1748,7 @@ To configure your chatbot:
         <td style="padding: 12px 16px;">
           <span style="background: #e0e7ff; color: #4338ca; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; font-family: var(--font-sans);">${escapeHTML(booking.date)}</span>
           <span style="background: #f1f5f9; color: #475569; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; font-family: var(--font-sans); margin-left: 4px;">${escapeHTML(booking.time)}</span>
+          ${webhookBadgeHTML}
         </td>
         <td style="padding: 12px 16px; font-family: var(--font-sans); color: #475569; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(rawText)}">
           ${badgeHTML}${escapeHTML(rawText) || '<span style="color:#94a3b8; font-style:italic;">None</span>'}
@@ -1656,6 +1797,16 @@ To configure your chatbot:
         localStorage.removeItem('luminabot_demo_bookings');
         fetchAndRenderBookings();
       }
+    });
+  }
+
+  const addInventoryItemBtn = document.getElementById('addInventoryItemBtn');
+  if (addInventoryItemBtn) {
+    addInventoryItemBtn.addEventListener('click', () => {
+      addInventoryRow();
+      saveCurrentConfig();
+      compileSystemPrompt();
+      updateWidgetPreview();
     });
   }
 

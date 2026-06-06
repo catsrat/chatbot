@@ -488,6 +488,27 @@
           rawText = notesVal.substring('[Appointment] '.length);
         }
 
+        let webhookBadgeHTML = '';
+        if (lead.webhookStatus === 'success') {
+          webhookBadgeHTML = `
+            <span style="background:#e2fbe8; color:#10b981; border:1px solid #a7f3d0; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700; font-family:'Outfit',sans-serif; margin-left:4px; display:inline-flex; align-items:center; gap:3px; vertical-align:middle;" title="Successfully synced to ServiceNow / Webhook">
+              <span style="width:5px; height:5px; background:#10b981; border-radius:50%; display:inline-block;"></span> Synced
+            </span>
+          `;
+        } else if (lead.webhookStatus === 'failed') {
+          webhookBadgeHTML = `
+            <span style="background:#fdf2f2; color:#ef4444; border:1px solid #fecaca; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700; font-family:'Outfit',sans-serif; margin-left:4px; display:inline-flex; align-items:center; gap:3px; vertical-align:middle;" title="Webhook sync failed. Check target URL.">
+              <span style="width:5px; height:5px; background:#ef4444; border-radius:50%; display:inline-block;"></span> Failed
+            </span>
+          `;
+        } else if (lead.webhookStatus === 'pending') {
+          webhookBadgeHTML = `
+            <span style="background:#fef3c7; color:#d97706; border:1px solid #fcd34d; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700; font-family:'Outfit',sans-serif; margin-left:4px; display:inline-flex; align-items:center; gap:3px; vertical-align:middle;" title="Webhook request is pending...">
+              <span style="width:5px; height:5px; background:#d97706; border-radius:50%; display:inline-block;"></span> Pending
+            </span>
+          `;
+        }
+
         const tr = document.createElement('tr');
         if (isNew) tr.classList.add('new-row');
         tr.innerHTML = `
@@ -499,6 +520,7 @@
           <td style="padding: 16px 20px;">
             <span class="date-badge" style="background: ${botThemeColor}18; color: var(--accent-color);">${escapeHTML(lead.date)}</span>
             <span class="time-badge">${escapeHTML(lead.time)}</span>
+            ${webhookBadgeHTML}
           </td>
           <td style="padding: 16px 20px; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(rawText)}">
             ${badgeHTML}${escapeHTML(rawText) || '<span style="color:var(--text-muted); font-style:italic;">None</span>'}

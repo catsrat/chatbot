@@ -563,6 +563,7 @@ app.post('/api/bots', asyncHandler(async (req, res) => {
     bookingMethod: data.bookingMethod || 'builtin',
     businessType: data.businessType || 'general',
     webhookUrl: data.webhookUrl || '',
+    inventory: data.inventory || [],
     emailConfig: data.emailConfig || {
       receiverEmail: '',
       resendApiKey: '',
@@ -636,6 +637,8 @@ app.post('/api/bots/:id/bookings', asyncHandler(async (req, res) => {
   const id = 'booking-' + Math.random().toString(36).substring(2, 7) + Date.now().toString(36);
   const now = new Date().toISOString();
 
+  const hasWebhook = (bot && bot.webhookUrl) ? 'pending' : 'na';
+
   const newBooking = {
     id,
     botId: req.params.id,
@@ -645,6 +648,7 @@ app.post('/api/bots/:id/bookings', asyncHandler(async (req, res) => {
     date: data.date,
     time: data.time,
     notes: data.notes || '',
+    webhookStatus: hasWebhook,
     createdAt: now
   };
 
@@ -703,7 +707,18 @@ app.post('/api/bots/:id/bookings', asyncHandler(async (req, res) => {
       createdAt: newBooking.createdAt
     };
 
-    postWebhook(targetBot.webhookUrl, webhookPayload);
+    postWebhook(targetBot.webhookUrl, webhookPayload).then(async (success) => {
+      try {
+        const currentBookings = await loadBookings();
+        if (currentBookings[id]) {
+          currentBookings[id].webhookStatus = success ? 'success' : 'failed';
+          await saveBookings(currentBookings);
+          console.log(`📅 Webhook status updated for booking ${id}: ${success ? 'success' : 'failed'}`);
+        }
+      } catch (err) {
+        console.error('Error updating webhook status in database:', err);
+      }
+    });
   }
 
   res.status(201).json({ success: true, booking: newBooking });
