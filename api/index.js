@@ -18,14 +18,31 @@ const PORT = 5001;
 
 // Ensure temp_audio directory exists for caching TTS files
 const tempAudioDir = path.join(__dirname, '..', 'temp_audio');
-if (!fs.existsSync(tempAudioDir)) {
-  fs.mkdirSync(tempAudioDir, { recursive: true });
+try {
+  if (!fs.existsSync(tempAudioDir)) {
+    fs.mkdirSync(tempAudioDir, { recursive: true });
+  }
+} catch (e) {
+  console.log('ℹ️ Running in read-only filesystem environment. Caching will fallback to /tmp.');
 }
+
 // Database paths (local vs writable /tmp fallback for serverless read-only environments)
 const LOCAL_BOTS_FILE = path.join(__dirname, '..', 'bots.json');
 const LOCAL_BOOKINGS_FILE = path.join(__dirname, '..', 'bookings.json');
 const TMP_BOTS_FILE = '/tmp/bots.json';
 const TMP_BOOKINGS_FILE = '/tmp/bookings.json';
+
+// Seed /tmp files from read-only package files if they do not exist
+function seedTmpFile(localPath, tmpPath) {
+  try {
+    if (!fs.existsSync(tmpPath) && fs.existsSync(localPath)) {
+      fs.copyFileSync(localPath, tmpPath);
+      console.log(`💡 Seeded ${tmpPath} from ${localPath}`);
+    }
+  } catch (e) {
+    console.error(`⚠️ Failed to seed ${tmpPath} from ${localPath}:`, e.message);
+  }
+}
 
 function getBotsFilePath() {
   try {
@@ -33,6 +50,7 @@ function getBotsFilePath() {
     fs.accessSync(file, fs.constants.W_OK);
     return LOCAL_BOTS_FILE;
   } catch (e) {
+    seedTmpFile(LOCAL_BOTS_FILE, TMP_BOTS_FILE);
     return TMP_BOTS_FILE;
   }
 }
@@ -43,6 +61,7 @@ function getBookingsFilePath() {
     fs.accessSync(file, fs.constants.W_OK);
     return LOCAL_BOOKINGS_FILE;
   } catch (e) {
+    seedTmpFile(LOCAL_BOOKINGS_FILE, TMP_BOOKINGS_FILE);
     return TMP_BOOKINGS_FILE;
   }
 }
@@ -814,6 +833,18 @@ app.get('/api/scrape/links', asyncHandler(async (req, res) => {
   }
 }));
 
+// SSRF prevention: check if host is private, loopback, or local link
+function isPrivateIp(host) {
+  if (!host) return true;
+  const h = host.toLowerCase().trim();
+  if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '0.0.0.0') return true;
+  
+  const ipv4Pattern = /^(10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+)$/;
+  if (ipv4Pattern.test(h)) return true;
+  
+  return false;
+}
+
 // Helper: fetch a URL server-side, following redirects up to 5 times
 function serverFetch(url, redirectCount = 0) {
   return new Promise((resolve, reject) => {
@@ -821,6 +852,13 @@ function serverFetch(url, redirectCount = 0) {
     
     const parsed = new (require('url').URL)(url);
     const proto = parsed.protocol === 'https:' ? https : http;
+    
+    // SSRF prevention: block private/loopback hosts in production/Vercel environments
+    const host = parsed.hostname;
+    const isProd = process.env.VERCEL || process.env.NODE_ENV === 'production';
+    if (isProd && isPrivateIp(host)) {
+      return reject(new Error('Access to private or local network addresses is forbidden in production'));
+    }
     
     const options = {
       hostname: parsed.hostname,
@@ -1331,7 +1369,7 @@ app.get('/api/voice/tts', asyncHandler(async (req, res) => {
 
   const apiKey = (bot.elevenLabsApiKey && bot.elevenLabsApiKey.trim())
     ? bot.elevenLabsApiKey.trim()
-    : 'sk_7745c909b8cc85e87df61d1f06f8091ca5c330de27e374e7';
+    : (process.env.ELEVENLABS_API_KEY || 'sk_7745c909b8cc85e87df61d1f06f8091ca5c330de27e374e7');
 
   const voiceId = (bot.elevenLabsVoiceId && bot.elevenLabsVoiceId.trim())
     ? bot.elevenLabsVoiceId.trim()
