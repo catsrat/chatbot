@@ -21,7 +21,9 @@
         "http://localhost/*",
         "http://127.0.0.1/*",
         "file:///*",
-        "https://*.vercel.app/*"
+        "https://*.vercel.app/*",
+        "https://luminabot.company/*",
+        "https://*.luminabot.company/*"
       ],
       "js": ["content.js"],
       "run_at": "document_start"
