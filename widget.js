@@ -1201,7 +1201,7 @@
     }
   }
 
-  let activeModel = sessionStorage.getItem('luminabot_active_model') || 'gemini-2.0-flash';
+  let activeModel = sessionStorage.getItem('luminabot_active_model') || 'gemini-3.5-flash';
 
   async function getAIChatCompletion(userPrompt) {
     const apiKey = config.apiKey || scriptEl?.getAttribute('data-api-key') || '';
@@ -1303,7 +1303,7 @@
     }
 
     // Call actual Gemini API with fallback pipeline
-    const modelsToTry = [activeModel, 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    const modelsToTry = [activeModel, 'gemini-3.5-flash', 'gemini-3.1-flash-lite'];
     const uniqueModels = [...new Set(modelsToTry)];
 
     // Extract training data block from systemPrompt to pass as context in contents rather than systemInstructions.

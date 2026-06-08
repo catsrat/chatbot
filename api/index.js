@@ -1003,7 +1003,7 @@ Example: "Understood, I will mark the Pils as out of stock now. [STOCK_UPDATE: i
       generationConfig: { temperature: 0.7, maxOutputTokens: 512 }
     };
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
     const geminiRes = await makeHttpsRequest(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
@@ -1106,7 +1106,7 @@ Format: "Achtung Chef: Ein Kunde ruft an wegen [Zusammenfassung]. Ich verbinde j
           generationConfig: { temperature: 0.3, maxOutputTokens: 128 }
         };
         const summaryRes = await makeHttpsRequest(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
           { method: 'POST', headers: { 'Content-Type': 'application/json' } },
           payload
         );
