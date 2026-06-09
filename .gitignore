@@ -1,6 +1,4 @@
 node_modules/
-bots.json
-bookings.json
 .DS_Store
 *.log
 temp_audio/

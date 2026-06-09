@@ -13,6 +13,10 @@ const https = require('https');
 const http = require('http');
 const crypto = require('crypto');
 
+// Statically required defaults to ensure bundling by Vercel NFT
+const defaultBots = require('../bots.json');
+const defaultBookings = require('../bookings.json');
+
 const app = express();
 const PORT = 5001;
 
@@ -32,15 +36,15 @@ const LOCAL_BOOKINGS_FILE = path.join(__dirname, '..', 'bookings.json');
 const TMP_BOTS_FILE = '/tmp/bots.json';
 const TMP_BOOKINGS_FILE = '/tmp/bookings.json';
 
-// Seed /tmp files from read-only package files if they do not exist
-function seedTmpFile(localPath, tmpPath) {
+// Seed /tmp files from statically required defaults to bypass Vercel zip resolution issues
+function seedTmpFile(defaultData, tmpPath) {
   try {
-    if (!fs.existsSync(tmpPath) && fs.existsSync(localPath)) {
-      fs.copyFileSync(localPath, tmpPath);
-      console.log(`💡 Seeded ${tmpPath} from ${localPath}`);
+    if (!fs.existsSync(tmpPath)) {
+      fs.writeFileSync(tmpPath, JSON.stringify(defaultData, null, 2), 'utf8');
+      console.log(`💡 Seeded ${tmpPath} with default data`);
     }
   } catch (e) {
-    console.error(`⚠️ Failed to seed ${tmpPath} from ${localPath}:`, e.message);
+    console.error(`⚠️ Failed to seed ${tmpPath}:`, e.message);
   }
 }
 
@@ -50,7 +54,7 @@ function getBotsFilePath() {
     fs.accessSync(file, fs.constants.W_OK);
     return LOCAL_BOTS_FILE;
   } catch (e) {
-    seedTmpFile(LOCAL_BOTS_FILE, TMP_BOTS_FILE);
+    seedTmpFile(defaultBots, TMP_BOTS_FILE);
     return TMP_BOTS_FILE;
   }
 }
@@ -61,7 +65,7 @@ function getBookingsFilePath() {
     fs.accessSync(file, fs.constants.W_OK);
     return LOCAL_BOOKINGS_FILE;
   } catch (e) {
-    seedTmpFile(LOCAL_BOOKINGS_FILE, TMP_BOOKINGS_FILE);
+    seedTmpFile(defaultBookings, TMP_BOOKINGS_FILE);
     return TMP_BOOKINGS_FILE;
   }
 }
@@ -100,8 +104,13 @@ if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
 async function loadBots() {
   if (kv) {
     try {
-      const bots = await kv.get('bots');
-      return bots || {};
+      let bots = await kv.get('bots');
+      if (!bots || Object.keys(bots).length === 0) {
+        bots = defaultBots || {};
+        await kv.set('bots', bots);
+        console.log('⚡ Seeded Vercel KV with default bots');
+      }
+      return bots;
     } catch (e) {
       console.error('Error reading bots from KV, falling back to file:', e.message);
     }
@@ -137,8 +146,13 @@ async function saveBots(bots) {
 async function loadBookings() {
   if (kv) {
     try {
-      const bookings = await kv.get('bookings');
-      return bookings || {};
+      let bookings = await kv.get('bookings');
+      if (!bookings || Object.keys(bookings).length === 0) {
+        bookings = defaultBookings || {};
+        await kv.set('bookings', bookings);
+        console.log('⚡ Seeded Vercel KV with default bookings');
+      }
+      return bookings;
     } catch (e) {
       console.error('Error reading bookings from KV, falling back to file:', e.message);
     }
@@ -552,7 +566,7 @@ app.get('/api/bots', asyncHandler(async (req, res) => {
   }));
   // Sort newest first
   summary.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
-  res.json({ bots: summary, total: summary.length });
+  res.json({ bots: summary, total: summary.length, kvEnabled: !!kv });
 }));
 
 // GET /api/bots/:id — Get full bot config (used by widget.js to load a bot)

@@ -1,0 +1,173 @@
+{
+  "booking-q7iwwmpzoehcf": {
+    "id": "booking-q7iwwmpzoehcf",
+    "botId": "DEMO",
+    "botName": "Demo Bot",
+    "name": "Test User",
+    "contact": "test@email.com",
+    "date": "2026-06-10",
+    "time": "14:00",
+    "notes": "Test booking",
+    "createdAt": "2026-06-04T15:54:31.119Z"
+  },
+  "booking-tftvwmpzomj4n": {
+    "id": "booking-tftvwmpzomj4n",
+    "botId": "DEMO",
+    "botName": "Demo Bot",
+    "name": "Jane Smith",
+    "contact": "jane@example.com",
+    "date": "2026-06-15",
+    "time": "10:30",
+    "notes": "Dental checkup",
+    "createdAt": "2026-06-04T16:00:46.679Z"
+  },
+  "booking-700tompzph9q2": {
+    "id": "booking-700tompzph9q2",
+    "botId": "hairartamsterdam-ass-f7rzk",
+    "botName": "Hairartamsterdam Assistant",
+    "name": "Test Customer",
+    "contact": "monetizationfast@gmail.com",
+    "date": "2026-06-04",
+    "time": "19:20",
+    "notes": "Hair appointment",
+    "createdAt": "2026-06-04T16:24:40.826Z"
+  },
+  "booking-44x82mpzqw5wn": {
+    "id": "booking-44x82mpzqw5wn",
+    "botId": "hairartamsterdam-ass-y9vr8",
+    "botName": "Hairartamsterdam Assistant",
+    "name": "Pvs",
+    "contact": "monetizationfast@gmail.com",
+    "date": "2026-06-04",
+    "time": "20:04",
+    "notes": "Haircut for 2",
+    "createdAt": "2026-06-04T17:04:15.335Z"
+  },
+  "booking-i2t29mpztrzr9": {
+    "id": "booking-i2t29mpztrzr9",
+    "botId": "hairartamsterdam-ass-9qrpn",
+    "botName": "Hairartamsterdam Assistant",
+    "name": "Ram",
+    "contact": "monetizationfast@gmail.com",
+    "date": "2026-06-05",
+    "time": "10:30",
+    "notes": "hair cut for 2 people.",
+    "createdAt": "2026-06-04T18:24:59.589Z"
+  },
+  "booking-zm6n8mpzuasv5": {
+    "id": "booking-zm6n8mpzuasv5",
+    "botId": "hairartamsterdam-ass-c65zz",
+    "botName": "Hairartamsterdam Assistant",
+    "name": "Ram",
+    "contact": "monetizationfast@gmail.com",
+    "date": "2026-06-05",
+    "time": "12:30",
+    "notes": "Hair cut",
+    "createdAt": "2026-06-04T18:39:37.121Z"
+  },
+  "booking-vfie0mpzuymk4": {
+    "id": "booking-vfie0mpzuymk4",
+    "botId": "al-bandy-assistant-38lhh",
+    "botName": "Al-bandy Assistant",
+    "name": "Ramvyas",
+    "contact": "monetizationfast@gmail.com",
+    "date": "2026-06-04",
+    "time": "20:00",
+    "notes": "reservation ist fur 2",
+    "createdAt": "2026-06-04T18:58:08.692Z"
+  },
+  "booking-eamd8mpzv8tfz": {
+    "id": "booking-eamd8mpzv8tfz",
+    "botId": "hairartamsterdam-ass-gv26e",
+    "botName": "Hairartamsterdam Assistant",
+    "name": "Ram",
+    "contact": "017643186357",
+    "date": "2026-06-05",
+    "time": "20:05",
+    "notes": "haircut for 2 people",
+    "createdAt": "2026-06-04T19:06:04.175Z"
+  },
+  "booking-gdt3emq22v17b": {
+    "id": "booking-gdt3emq22v17b",
+    "botId": "webhook-test-bot-ts90y",
+    "botName": "Webhook Test Bot",
+    "name": "Jane Doe",
+    "contact": "jane@example.com",
+    "date": "2026-06-06",
+    "time": "14:00",
+    "notes": "[Support Ticket] Internet is down on lead router.",
+    "createdAt": "2026-06-06T08:14:50.327Z"
+  },
+  "booking-jyqowmq26a9yy": {
+    "id": "booking-jyqowmq26a9yy",
+    "botId": "pizza-palace-vov8f",
+    "botName": "Pizza Palace",
+    "name": "test caller",
+    "contact": "Voice Call (+15550199)",
+    "date": "2026-06-07",
+    "time": "19:00",
+    "notes": "Reservierung für 2 Personen (über Sprachassistent erstellt)",
+    "webhookStatus": "na",
+    "createdAt": "2026-06-06T09:50:40.378Z"
+  },
+  "booking-4wi3imq26ar6m": {
+    "id": "booking-4wi3imq26ar6m",
+    "botId": "pizza-palace-akfck",
+    "botName": "Pizza Palace",
+    "name": "test caller",
+    "contact": "Voice Call (+15550199)",
+    "date": "2026-06-07",
+    "time": "19:00",
+    "notes": "Reservierung für 2 Personen (über Sprachassistent erstellt)",
+    "webhookStatus": "na",
+    "createdAt": "2026-06-06T09:51:02.686Z"
+  },
+  "booking-4km2ymq2gl5ir": {
+    "id": "booking-4km2ymq2gl5ir",
+    "botId": "pizza-palace-bq88u",
+    "botName": "Pizza Palace",
+    "name": "test caller",
+    "contact": "Voice Call (+15550199)",
+    "date": "2026-06-07",
+    "time": "19:00",
+    "notes": "Reservierung für 2 Personen (über Sprachassistent erstellt)",
+    "webhookStatus": "na",
+    "createdAt": "2026-06-06T14:39:03.987Z"
+  },
+  "booking-f015fmq2glyvb": {
+    "id": "booking-f015fmq2glyvb",
+    "botId": "pizza-palace-ap2je",
+    "botName": "Pizza Palace",
+    "name": "test caller",
+    "contact": "Voice Call (+15550199)",
+    "date": "2026-06-07",
+    "time": "19:00",
+    "notes": "Reservierung für 2 Personen (über Sprachassistent erstellt)",
+    "webhookStatus": "na",
+    "createdAt": "2026-06-06T14:39:42.023Z"
+  },
+  "booking-6aic4mq2gpblx": {
+    "id": "booking-6aic4mq2gpblx",
+    "botId": "pizza-palace-x01wh",
+    "botName": "Pizza Palace",
+    "name": "test caller",
+    "contact": "Voice Call (+15550199)",
+    "date": "2026-06-07",
+    "time": "19:00",
+    "notes": "Reservierung für 2 Personen (über Sprachassistent erstellt)",
+    "webhookStatus": "na",
+    "createdAt": "2026-06-06T14:42:18.501Z"
+  },
+  "booking-03qnomq2gpinu": {
+    "id": "booking-03qnomq2gpinu",
+    "botId": "pizza-palace-75f49",
+    "botName": "Pizza Palace",
+    "name": "test caller",
+    "contact": "Voice Call (+15550199)",
+    "date": "2026-06-07",
+    "time": "19:00",
+    "notes": "Reservierung für 2 Personen (über Sprachassistent erstellt)",
+    "webhookStatus": "na",
+    "createdAt": "2026-06-06T14:42:27.642Z"
+  }
+}

@@ -1428,6 +1428,18 @@ To configure your chatbot:
         botsBadge.style.display = count > 0 ? 'flex' : 'none';
       }
       if (botsCount) botsCount.textContent = `${count} bot${count !== 1 ? 's' : ''} saved`;
+
+      // Dynamically toggle KV database warnings based on kvEnabled status
+      const kvWarningBanner = document.getElementById('kvWarningBanner');
+      const mainKvWarning = document.getElementById('mainKvWarning');
+      if (data.kvEnabled === false) {
+        if (kvWarningBanner) kvWarningBanner.style.display = 'flex';
+        if (mainKvWarning) mainKvWarning.style.display = 'block';
+      } else {
+        if (kvWarningBanner) kvWarningBanner.style.display = 'none';
+        if (mainKvWarning) mainKvWarning.style.display = 'none';
+      }
+
       return data.bots || [];
     } catch (e) {
       console.warn('Failed to fetch bots:', e);
